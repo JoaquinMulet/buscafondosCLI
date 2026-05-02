@@ -23,6 +23,19 @@ function output(data) {
   return null;
 }
 
+function wrapResponse(items, total, limit, offset) {
+  return {
+    meta: {
+      total_records: total,
+      returned_records: items.length,
+      has_more: (offset || 0) + items.length < total,
+      limit: limit,
+      offset: offset || 0
+    },
+    data: items
+  };
+}
+
 function printTable(headers, rows) {
   if (globalJson) return;
   const colWidths = headers.map((h, i) => {
@@ -58,25 +71,43 @@ async function health() {
   });
 }
 
-async function providers(limit) {
-  const result = await client.listProviders();
+async function providers(opts) {
+  const result = await client.listProviders({
+    limit: opts.limit,
+    offset: opts.offset
+  });
   handleResult(result, (data) => {
-    const items = (data.data || []).slice(0, limit);
-    if (globalJson || globalOutputFile) return { providers: items };
-    console.log(chalk.bold(`\nAdministradoras (${items.length})${limit ? ` (of ${data.data?.length || 0})` : ''}\n`));
+    let items = data.data || [];
+
+    if (opts.search) {
+      const q = opts.search.toLowerCase();
+      items = items.filter(item => (item.attributes.name || '').toLowerCase().includes(q));
+    }
+
+    const total = items.length;
+    const offset = opts.offset || 0;
+    items = items.slice(offset, opts.limit ? offset + opts.limit : undefined);
+
+    const response = wrapResponse(items, total, opts.limit, offset);
+    if (globalJson || globalOutputFile) return response;
+    console.log(chalk.bold(`\nAdministradoras (${items.length})${opts.limit ? ` (of ${total})` : ''}\n`));
     const headers = ['ID', 'Nombre'];
     const rows = items.map(item => [item.id.toString(), item.attributes.name]);
     printTable(headers, rows);
-    return { providers: items };
+    if (total > items.length) console.log(chalk.dim(`Hint: use --offset ${offset + items.length} to get more`));
+    return response;
   });
 }
 
-async function funds(providerId, limit) {
-  const result = await client.listFunds(parseInt(providerId));
+async function funds(providerId, opts) {
+  const result = await client.listFunds(parseInt(providerId), opts);
   handleResult(result, (data) => {
-    const items = (data.data || []).slice(0, limit);
-    if (globalJson || globalOutputFile) return { funds: items };
-    console.log(chalk.bold(`\nFondos (${items.length})${limit ? ` (of ${data.data?.length || 0})` : ''}\n`));
+    const total = data.data?.length || 0;
+    const offset = opts.offset || 0;
+    const items = (data.data || []).slice(offset, opts.limit ? offset + opts.limit : undefined);
+    const response = wrapResponse(items, total, opts.limit, offset);
+    if (globalJson || globalOutputFile) return response;
+    console.log(chalk.bold(`\nFondos (${items.length})${opts.limit ? ` (of ${total})` : ''}\n`));
     const headers = ['ID', 'Nombre', 'RUN', 'Categoria'];
     const rows = items.map(item => [
       item.id.toString(),
@@ -85,16 +116,20 @@ async function funds(providerId, limit) {
       item.attributes.category
     ]);
     printTable(headers, rows);
-    return { funds: items };
+    if (total > items.length) console.log(chalk.dim(`Hint: use --offset ${offset + items.length} to get more`));
+    return response;
   });
 }
 
-async function series(conceptId, limit) {
-  const result = await client.listSeries(parseInt(conceptId));
+async function series(conceptId, opts) {
+  const result = await client.listSeries(parseInt(conceptId), opts);
   handleResult(result, (data) => {
-    const items = (data.data || []).slice(0, limit);
-    if (globalJson || globalOutputFile) return { series: items };
-    console.log(chalk.bold(`\nSeries (${items.length})${limit ? ` (of ${data.data?.length || 0})` : ''}\n`));
+    const total = data.data?.length || 0;
+    const offset = opts.offset || 0;
+    const items = (data.data || []).slice(offset, opts.limit ? offset + opts.limit : undefined);
+    const response = wrapResponse(items, total, opts.limit, offset);
+    if (globalJson || globalOutputFile) return response;
+    console.log(chalk.bold(`\nSeries (${items.length})${opts.limit ? ` (of ${total})` : ''}\n`));
     const headers = ['ID', 'Nombre', 'Serie', 'Clase', 'Valor Cuota', 'Patrimonio'];
     const rows = items.map(item => {
       const attrs = item.attributes;
@@ -109,7 +144,8 @@ async function series(conceptId, limit) {
       ];
     });
     printTable(headers, rows);
-    return { series: items };
+    if (total > items.length) console.log(chalk.dim(`Hint: use --offset ${offset + items.length} to get more`));
+    return response;
   });
 }
 
@@ -139,8 +175,8 @@ async function risk(assetId) {
   });
 }
 
-async function ranking(metric, date) {
-  const result = await client.ranking(metric, date);
+async function ranking(opts) {
+  const result = await client.ranking(opts.metric, opts.date, opts);
   handleResult(result, (data) => {
     const items = data.data || [];
     const meta = data.meta || {};
@@ -162,12 +198,59 @@ async function ranking(metric, date) {
   });
 }
 
-async function allFunds(category, date, limit) {
-  const result = await client.listAllFunds(category, date);
+async function allFunds(opts) {
+  const result = await client.listAllFunds({
+    category: opts.category,
+    date: opts.date
+  });
   handleResult(result, (data) => {
-    const items = (data.data || []).slice(0, limit);
-    if (globalJson || globalOutputFile) return { funds: items, total: data.data?.length || 0 };
-    console.log(chalk.bold(`\nTodos los fondos (${items.length})${limit ? ` (of ${data.data?.length || 0})` : ''}\n`));
+    let items = data.data || [];
+
+    if (opts.search) {
+      const q = opts.search.toLowerCase();
+      items = items.filter(item => (item.fundName || '').toLowerCase().includes(q));
+    }
+    if (opts.agf) {
+      const q = opts.agf.toLowerCase();
+      items = items.filter(item => (item.agf || '').toLowerCase().includes(q));
+    }
+    if (opts.maxTac != null) {
+      items = items.filter(item => item.tac != null && item.tac <= opts.maxTac);
+    }
+    if (opts.minPatrimony != null) {
+      items = items.filter(item => (item.patrimony || 0) >= opts.minPatrimony);
+    }
+
+    const total = items.length;
+
+    if (opts.sortBy) {
+      const field = opts.sortBy;
+      const dir = opts.order === 'desc' ? -1 : 1;
+      items = [...items].sort((a, b) => {
+        const va = a[field];
+        const vb = b[field];
+        if (va == null) return 1;
+        if (vb == null) return -1;
+        if (typeof va === 'string') {
+          return dir * va.localeCompare(vb);
+        }
+        return dir * ((va < vb) ? -1 : (va > vb) ? 1 : 0);
+      });
+    }
+
+    const offset = opts.offset || 0;
+    items = items.slice(offset, opts.limit ? offset + opts.limit : undefined);
+
+    const response = wrapResponse(items, total, opts.limit, offset);
+    if (globalJson || globalOutputFile) return response;
+    const filterDesc = [];
+    if (opts.search) filterDesc.push(`search:"${opts.search}"`);
+    if (opts.agf) filterDesc.push(`agf:"${opts.agf}"`);
+    if (opts.maxTac) filterDesc.push(`maxTac:${opts.maxTac}`);
+    if (opts.minPatrimony) filterDesc.push(`minPatrimony:${opts.minPatrimony}`);
+    if (opts.sortBy) filterDesc.push(`sort:${opts.sortBy}`);
+    const filterStr = filterDesc.length ? ` [${filterDesc.join(', ')}]` : '';
+    console.log(chalk.bold(`\nTodos los fondos${filterStr} (${items.length})${opts.limit ? ` (of ${total})` : ''}\n`));
     const headers = ['RUN', 'Nombre', 'AGF', 'Cat', 'TAC', 'Var.Dia%', 'Var.Mes%'];
     const rows = items.map(item => [
       item.run,
@@ -179,30 +262,35 @@ async function allFunds(category, date, limit) {
       (item.monthlyChange || 0).toFixed(2)
     ]);
     printTable(headers, rows);
-    return { funds: items, total: data.data?.length || 0 };
+    if (total > items.length) console.log(chalk.dim(`Hint: use --offset ${offset + items.length} to get more`));
+    return response;
   });
 }
 
-async function days(assetId, fromDate, limit) {
-  const result = await client.getDays(parseInt(assetId), fromDate);
+async function days(assetId, opts) {
+  const result = await client.getDays(parseInt(assetId), opts.fromDate, opts);
   handleResult(result, (data) => {
     const meta = data.meta || {};
     const allItems = (data.data || []).reverse();
-    const items = limit ? allItems.slice(0, limit) : allItems.slice(0, 30);
-    if (globalJson || globalOutputFile) return data;
-    console.log(chalk.bold(`\nSerie historica - Asset ${meta.asset_id} (${items.length} dias)${limit ? ` (of ${data.data?.length || 0})` : ''}\n`));
+    const offset = opts.offset || 0;
+    const sliced = allItems.slice(offset, opts.limit ? offset + opts.limit : undefined);
+    const total = allItems.length;
+    const response = wrapResponse(sliced, total, opts.limit, offset);
+    if (globalJson || globalOutputFile) return response;
+    console.log(chalk.bold(`\nSerie historica - Asset ${meta.asset_id || assetId} (${sliced.length})${opts.limit ? ` (of ${total})` : ''}\n`));
     const headers = ['Fecha', 'Valor Cuota'];
-    const rows = items.map(item => {
+    const rows = sliced.map(item => {
       const attrs = item.attributes || item;
       return [attrs.date || '', (attrs.price || 0).toFixed(4)];
     });
     printTable(headers, rows);
-    return data;
+    if (total > sliced.length) console.log(chalk.dim(`Hint: use --offset ${offset + sliced.length} to get more`));
+    return response;
   });
 }
 
-async function returns(assetId, fromDate) {
-  const result = await client.getDays(parseInt(assetId), fromDate);
+async function returns(assetId, opts) {
+  const result = await client.getDays(parseInt(assetId), opts.fromDate, { limit: 1000 });
   handleResult(result, (data) => {
     const items = data.data || [];
     const prices = items
@@ -254,19 +342,24 @@ async function returns(assetId, fromDate) {
   });
 }
 
-async function tacHistory(assetId, fromDate) {
-  const result = await client.getExpenseRatioHistory(parseInt(assetId), fromDate);
+async function tacHistory(assetId, opts) {
+  const result = await client.getExpenseRatioHistory(parseInt(assetId), opts);
   handleResult(result, (data) => {
     const items = data.data || [];
-    if (globalJson || globalOutputFile) return data;
-    console.log(chalk.bold(`\nHistorial TAC - Asset ${assetId} (${items.length} meses)\n`));
+    const total = items.length;
+    const offset = opts.offset || 0;
+    const sliced = items.slice(offset, opts.limit ? offset + opts.limit : undefined);
+    const response = wrapResponse(sliced, total, opts.limit, offset);
+    if (globalJson || globalOutputFile) return response;
+    console.log(chalk.bold(`\nHistorial TAC - Asset ${assetId} (${sliced.length})${opts.limit ? ` (of ${total})` : ''}\n`));
     const headers = ['Fecha', 'TAC%'];
-    const rows = items.map(item => {
+    const rows = sliced.map(item => {
       const attrs = item.attributes || item;
       return [attrs.date || '', ((attrs.expense_ratio || 0) * 100).toFixed(4) + '%'];
     });
     printTable(headers, rows.reverse());
-    return data;
+    if (total > sliced.length) console.log(chalk.dim(`Hint: use --offset ${offset + sliced.length} to get more`));
+    return response;
   });
 }
 
@@ -315,13 +408,18 @@ async function evolution(administrators, metric, fromMonth, toMonth) {
   });
 }
 
-async function holdings(run, month, market, limit) {
-  const result = await client.carteraHoldings(run, month, market);
+async function holdings(run, opts) {
+  const result = await client.carteraHoldings(run, opts.month, opts.market, opts);
   handleResult(result, (data) => {
-    const items = (data.data || []).slice(0, limit);
+    const total = data.data?.length || 0;
+    const offset = opts.offset || 0;
+    const items = (data.data || []).slice(offset, opts.limit ? offset + opts.limit : undefined);
     const meta = data.meta || {};
-    if (globalJson || globalOutputFile) return { holdings: items, meta };
-    console.log(chalk.bold(`\nHoldings - RUN ${meta.run} (${meta.month})${limit ? ` (of ${data.data?.length || 0})` : ''}\n`));
+    const response = wrapResponse(items, total, opts.limit, offset);
+    response.meta.run = meta.run;
+    response.meta.month = meta.month;
+    if (globalJson || globalOutputFile) return response;
+    console.log(chalk.bold(`\nHoldings - RUN ${meta.run} (${meta.month})${opts.limit ? ` (${items.length} of ${total})` : ''}\n`));
     const headers = ['Emisor', 'Nemotecnico', 'Pais', 'Tipo', 'Valorizacion', '%Activo'];
     const rows = items.map(item => {
       const attrs = item.attributes;
@@ -335,8 +433,52 @@ async function holdings(run, month, market, limit) {
       ];
     });
     printTable(headers, rows);
-    return { holdings: items, meta };
+    if (total > items.length) console.log(chalk.dim(`Hint: use --offset ${offset + items.length} to get more`));
+    return response;
   });
+}
+
+const SCHEMAS = {
+  health: { fields: { status: 'string', last_scraped_date: 'string', total_records: 'number' } },
+  providers: { fields: { id: 'number', name: 'string' } },
+  funds: { fields: { id: 'number', name: 'string', run: 'string', category: 'string' } },
+  series: { fields: { id: 'number', name: 'string', serie: 'string', investor_class: 'string', net_asset_value: 'number', total_net_assets: 'number' } },
+  'all-funds': {
+    fields: {
+      run: 'string', fundName: 'string', agf: 'string', category: 'string',
+      tac: 'number', dailyChange: 'number', monthlyChange: 'number', patrimony: 'number',
+      fundId: 'string', serie: 'string', serieId: 'string', currency: 'string',
+      investorClass: 'string', shareholders: 'number',
+      volatility_monthly_12m: 'number', volatility_monthly_36m: 'number',
+      volatility_annualized_12m: 'number', volatility_annualized_36m: 'number',
+      max_drawdown_36m: 'number', risk_level: 'string', risk_score: 'number',
+      risk_as_of_date: 'string', risk_method_version: 'string'
+    }
+  },
+  tac: { fields: { expense_ratio: 'number', investor_class: 'string' } },
+  risk: { fields: { serie: 'string', run: 'string', as_of_date: 'string', volatility_annualized_12m: 'number', volatility_annualized_36m: 'number', max_drawdown_36m: 'number', risk_level: 'string', risk_score: 'number' } },
+  ranking: { fields: { rank: 'number', administrator: 'string', total_patrimony: 'number', total_shareholders: 'number', fund_count: 'number' } },
+  days: { fields: { date: 'string', price: 'number' } },
+  cartera: { fields: { tipo_instrumento: 'string', num_holdings: 'number', valorizacion_nacional: 'number', valorizacion_extranjera: 'number', pct_activo_fondo: 'number' } },
+  holdings: { fields: { emisor: 'string', nemotecnico: 'string', pais: 'string', tipo_instrumento: 'string', valorizacion: 'number', pct_activo_fondo: 'number' } }
+};
+
+async function describe(schemaName) {
+  const schema = SCHEMAS[schemaName];
+  if (!schema) {
+    console.error(chalk.red(`Schema '${schemaName}' not found. Available: ${Object.keys(SCHEMAS).join(', ')}`));
+    process.exit(1);
+  }
+  const result = { schema: schemaName, fields: schema.fields };
+  if (globalJson || globalOutputFile) {
+    output(result);
+  } else {
+    console.log(chalk.bold(`\nSchema: ${schemaName}\n`));
+    const headers = ['Field', 'Type'];
+    const rows = Object.entries(schema.fields).map(([k, v]) => [k, v]);
+    printTable(headers, rows);
+  }
+  return null;
 }
 
 const program = new Command();
@@ -344,7 +486,7 @@ const program = new Command();
 program
   .name('buscafondos')
   .description('CLI para fondos mutuos chilenos via API de BuscaFondos')
-  .version('1.0.0')
+  .version('1.1.0')
   .addOption(new Option('-j, --json').hideHelp())
   .addOption(new Option('-o, --output <file>').hideHelp())
   .hook('preAction', (thisCommand) => {
@@ -357,19 +499,23 @@ program.command('health').description('Ver estado del servicio').action(health);
 program.command('providers')
   .description('Listar todas las administradoras (AGF)')
   .option('-l, --limit <n>', 'Limitar numero de resultados', parseInt)
-  .action((opts) => providers(opts.limit));
+  .option('-o, --offset <n>', 'Desplazamiento (para paginar)', parseInt)
+  .option('-s, --search <text>', 'Buscar por nombre')
+  .action((opts) => providers(opts));
 
 program.command('funds')
   .description('Listar fondos de una administradora')
   .argument('<provider_id>', 'ID de la AGF')
   .option('-l, --limit <n>', 'Limitar numero de resultados', parseInt)
-  .action((providerId, opts) => funds(providerId, opts.limit));
+  .option('-o, --offset <n>', 'Desplazamiento (para paginar)', parseInt)
+  .action((providerId, opts) => funds(providerId, opts));
 
 program.command('series')
   .description('Listar series de un fondo')
   .argument('<concept_id>', 'ID del concepto')
   .option('-l, --limit <n>', 'Limitar numero de resultados', parseInt)
-  .action((conceptId, opts) => series(conceptId, opts.limit));
+  .option('-o, --offset <n>', 'Desplazamiento (para paginar)', parseInt)
+  .action((conceptId, opts) => series(conceptId, opts));
 
 program.command('tac').description('Ver TAC de una serie').argument('<asset_id>', 'ID de la serie').action(tac);
 
@@ -379,14 +525,23 @@ program.command('ranking')
   .description('Ranking de AGF por patrimonio o participantes')
   .option('-m, --metric <metric>', 'Metrica (patrimony|shareholders)', 'patrimony')
   .option('-d, --date <date>', 'Fecha (YYYY-MM-DD)')
-  .action((opts) => ranking(opts.metric, opts.date));
+  .option('-l, --limit <n>', 'Limitar numero de resultados', parseInt)
+  .option('-o, --offset <n>', 'Desplazamiento (para paginar)', parseInt)
+  .action((opts) => ranking(opts));
 
 program.command('all-funds')
-  .description('Listar todos los fondos del mercado')
+  .description('Listar todos los fondos del mercado con filtros avanzados')
   .option('-c, --category <category>', 'Categoria del fondo')
   .option('-d, --date <date>', 'Fecha (YYYY-MM-DD)')
   .option('-l, --limit <n>', 'Limitar numero de resultados', parseInt)
-  .action((opts) => allFunds(opts.category, opts.date, opts.limit));
+  .option('-o, --offset <n>', 'Desplazamiento (para paginar)', parseInt)
+  .option('-s, --search <text>', 'Buscar por nombre de fondo')
+  .option('--agf <name>', 'Filtrar por nombre de AGF')
+  .option('--max-tac <number>', 'TAC maximo (ej: 0.02)')
+  .option('--min-patrimony <number>', 'Patrimonio minimo (en miles)')
+  .option('--sort-by <field>', 'Campo para ordenar (tac|patrimony|fundName|agf)')
+  .option('--order <direction>', 'Orden (asc|desc)', 'asc')
+  .action((opts) => allFunds(opts));
 
 program.command('cartera')
   .description('Resumen de cartera de un fondo')
@@ -400,26 +555,29 @@ program.command('holdings')
   .option('-m, --month <month>', 'Mes (YYYY-MM)')
   .option('-mkt, --market <market>', 'Mercado (all|N|E)', 'all')
   .option('-l, --limit <n>', 'Limitar numero de resultados', parseInt)
-  .action((run, opts) => holdings(run, opts.month, opts.market, opts.limit));
+  .option('-o, --offset <n>', 'Desplazamiento (para paginar)', parseInt)
+  .action((run, opts) => holdings(run, opts));
 
 program.command('days')
   .description('Serie historica de valores cuota')
   .argument('<asset_id>', 'ID de la serie')
   .option('-f, --from-date <date>', 'Fecha inicio (YYYY-MM-DD)')
   .option('-l, --limit <n>', 'Limitar numero de resultados', parseInt)
-  .action((assetId, opts) => days(assetId, opts.fromDate, opts.limit));
+  .option('-o, --offset <n>', 'Desplazamiento (para paginar)', parseInt)
+  .action((assetId, opts) => days(assetId, opts));
 
 program.command('returns')
   .description('Rentabilidad anualizada a 1Y, 3Y')
   .argument('<asset_id>', 'ID de la serie')
   .option('-f, --from-date <date>', 'Fecha inicio (YYYY-MM-DD)')
-  .action((assetId, opts) => returns(assetId, opts.fromDate));
+  .action((assetId, opts) => returns(assetId, opts));
 
 program.command('tac-history')
   .description('Historial de TAC de una serie')
   .argument('<asset_id>', 'ID de la serie')
-  .option('-f, --from-date <date>', 'Fecha inicio (YYYY-MM-DD)')
-  .action((assetId, opts) => tacHistory(assetId, opts.fromDate));
+  .option('-l, --limit <n>', 'Limitar numero de resultados', parseInt)
+  .option('-o, --offset <n>', 'Desplazamiento (para paginar)', parseInt)
+  .action((assetId, opts) => tacHistory(assetId, opts));
 
 program.command('evolution')
   .description('Evolucion mensual de administradoras (patrimonio o participantes)')
@@ -433,5 +591,10 @@ program.command('evolution')
     opts.from,
     opts.to
   ));
+
+program.command('describe')
+  .description('Ver esquema de campos disponibles para un tipo de consulta')
+  .argument('<schema>', `Schema a describir. Opciones: ${Object.keys(SCHEMAS).join(', ')}`)
+  .action((schema) => describe(schema));
 
 program.parse();

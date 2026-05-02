@@ -11,6 +11,84 @@ _Skill_ (guía) para agentes de IA que realizan análisis de fondos mutuos chile
 
 ---
 
+## Mejoras del CLI para Agentes (v1.1.0)
+
+Esta versión del CLI está optimizada para minimizar el consumo de tokens de contexto en agentes LLM. Las mejoras principales son:
+
+### 1. Estructura de Respuesta JSON Estandarizada
+
+Todas las respuestas JSON ahora incluyen un objeto `meta` que permite al LLM tomar decisiones rápidas sin inspeccionar los datos:
+
+```json
+{
+  "meta": {
+    "total_records": 850,
+    "returned_records": 10,
+    "has_more": true,
+    "limit": 10,
+    "offset": 0
+  },
+  "data": [ ... ]
+}
+```
+
+- **`has_more: true`** → existen más resultados. El LLM debe usar `--offset` para continuar iterando.
+- **`has_more: false`** → los resultados están completos. No necesita paginar más.
+
+### 2. Paginación con `--offset`
+
+Todos los comandos de listado aceptan `--offset <n>` junto con `--limit <n>` para iterar en ventanas controladas sin descargar todo el dataset:
+
+```bash
+# Ventana 1: primeros 10
+buscafondos all-funds --limit 10 --offset 0 --json
+
+# Ventana 2: siguientes 10
+buscafondos all-funds --limit 10 --offset 10 --json
+
+# Ventana 3: siguientes 10
+buscafondos all-funds --limit 10 --offset 20 --json
+```
+
+**Regla:** Cuando `has_more: true`, usar `--offset` para la siguiente ventana. Cuando `has_more: false`, detener la iteración.
+
+### 3. Filtrado y Búsqueda Nativa en Servidor
+
+El CLI procesa filtros en servidor. Esto devuelve payloads más pequeños y exactos, reduciendo tokens:
+
+```bash
+# Filtrado nativo (recomendado para LLMs)
+buscafondos all-funds --category equity --max-tac 0.02 --sort-by tac --order asc --limit 5 --json
+
+# Búsqueda por nombre de AGF
+buscafondos all-funds --agf "Fintual" --json
+
+# Búsqueda por texto libre
+buscafondos providers --search "Fintual" --json
+```
+
+### 4. Comando `describe` para Descubrimiento de Esquemas
+
+Antes de procesar datos con `jq` o código, el LLM debe conocer la estructura exacta:
+
+```bash
+buscafondos describe all-funds --json
+```
+
+Esto devuelve los campos disponibles y sus tipos, evitando alucinaciones sobre nombres de campos.
+
+### 5. Ordenamiento en Servidor con `--sort-by`
+
+Para encontrar el fondo con menor TAC en una categoría, usar ordenamiento en servidor:
+
+```bash
+buscafondos all-funds --category equity --sort-by tac --order asc --limit 5 --json
+```
+
+El resultado ya viene ordenado y la respuesta es mínima. No es necesario descargar todos los fondos equity y ordenarlos localmente.
+
+---
+
 ## Arquitectura del CLI y Recursos Disponibles
 
 El CLI `buscafondos` es la única interfaz de acceso a los datos. Todos los comandos devuelven JSON con la estructura `data` + `attributes`. El agente debe tratar cada respuesta como una fuente de datos dinámica, no como valores estáticos.
@@ -19,7 +97,7 @@ El CLI `buscafondos` es la única interfaz de acceso a los datos. Todos los coma
 
 **CRÍTICO — Rentabilidad ya incluye TAC:** La rentabilidad que publica el fondo (y que devuelve el CLI) ES la rentabilidad neta después de descontar la TAC. NO restes la TAC nuevamente. Sería un error grave duplicar este descuento. Si necesitas comparar dos fondos, usa directamente su rentabilidad publicada.
 
-**Filtrado de resultados:** El CLI soporta output JSON con el flag `--json` o guardar a archivo con `--output`. Para filtrar grandes volúmenes, usar estos flags con `jq`:
+**Filtrado de resultados:** El CLI soporta output JSON con el flag `--json` o guardar a archivo con `--output`. Para filtrar grandes volúmenes, usar estos flags con `jq`. Además, el CLI ofrece filtrado nativo directo (ver sección de comandos) que reduce la necesidad de `jq` para casos comunes.
 
 ```bash
 # Output JSON directo para piping
@@ -61,15 +139,78 @@ buscafondos health
 
 ---
 
+### describe <schema> — Ver esquema de campos disponibles
+
+```bash
+buscafondos describe all-funds
+buscafondos describe providers
+buscafondos describe holdings
+buscafondos describe --json all-funds
+```
+
+**Descripción:** Este comando devuelve la estructura de campos disponibles para un tipo de consulta, incluyendo el tipo de dato de cada campo. Es el primer paso que el LLM debe ejecutar antes de usar un comando nuevo o escribir código que procese las respuestas.
+
+**Schemas disponibles:** `health`, `providers`, `funds`, `series`, `all-funds`, `tac`, `risk`, `ranking`, `days`, `cartera`, `holdings`.
+
+**Ejemplo de respuesta:**
+```json
+{
+  "schema": "all-funds",
+  "fields": {
+    "run": "string",
+    "fundName": "string",
+    "agf": "string",
+    "category": "string",
+    "tac": "number",
+    "dailyChange": "number",
+    "monthlyChange": "number",
+    "patrimony": "number",
+    "fundId": "string",
+    "serie": "string",
+    "serieId": "string",
+    "currency": "string",
+    "investorClass": "string",
+    "shareholders": "number",
+    "volatility_monthly_12m": "number",
+    "volatility_monthly_36m": "number",
+    "volatility_annualized_12m": "number",
+    "volatility_annualized_36m": "number",
+    "max_drawdown_36m": "number",
+    "risk_level": "string",
+    "risk_score": "number",
+    "risk_as_of_date": "string",
+    "risk_method_version": "string"
+  }
+}
+```
+
+**Cómo usarlo:** El LLM debe ejecutar `describe <schema>` cuando necesite conocer los campos exactos antes de construir queries con `jq` o procesar datos en código. Esto evita alucinaciones sobre nombres de campos.
+
+---
+
 ### providers — Identificar AGF del sistema
 
 ```bash
 buscafondos providers
 buscafondos providers --limit 10
+buscafondos providers --search "Fintual"
+buscafondos providers --limit 10 --offset 20
 ```
 
 **Parámetros:**
 - `-l, --limit <n>`: Limitar número de resultados.
+- `-o, --offset <n>`: Desplazamiento para paginar (usar junto con `--limit` para iterar).
+- `-s, --search <text>`: Buscar por nombre directamente en servidor (evita descarga completa).
+
+**Respuesta JSON con metadatos:**
+```json
+{
+  "meta": { "total_records": 150, "returned_records": 10, "has_more": true, "limit": 10, "offset": 0 },
+  "data": [ ... ]
+}
+```
+
+El campo `has_more` indica si existen más resultados para paginar. El LLM debe revisar este campo antes de asumir que los resultados están completos.
 
 **Retorna:** Lista de todas las administradoras con `id` (CRC32) y `name`.
 
@@ -84,10 +225,20 @@ buscafondos providers --limit 10
 ```bash
 buscafondos funds <provider_id>
 buscafondos funds <provider_id> --limit 20
+buscafondos funds <provider_id> --limit 10 --offset 10
 ```
 
 **Parámetros:**
 - `-l, --limit <n>`: Limitar número de resultados.
+- `-o, --offset <n>`: Desplazamiento para paginar.
+
+**Respuesta JSON con metadatos:**
+```json
+{
+  "meta": { "total_records": 45, "returned_records": 10, "has_more": true, "limit": 10, "offset": 10 },
+  "data": [ ... ]
+}
+```
 
 **Retorna:** Lista de fondos de una AGF con `id` (concept_id), `run`, `name`, `category`.
 
@@ -109,10 +260,20 @@ El agente debe usar estas definiciones para interpretar lo que el CLI devuelve, 
 ```bash
 buscafondos series <concept_id>
 buscafondos series <concept_id> --limit 10
+buscafondos series <concept_id> --limit 10 --offset 10
 ```
 
 **Parámetros:**
 - `-l, --limit <n>`: Limitar número de resultados.
+- `-o, --offset <n>`: Desplazamiento para paginar.
+
+**Respuesta JSON con metadatos:**
+```json
+{
+  "meta": { "total_records": 8, "returned_records": 5, "has_more": false, "limit": 5, "offset": 0 },
+  "data": [ ... ]
+}
+```
 
 **Retorna:** Series de un fondo con `id` (asset_id), `name`, `serie` (letra), `investor_class`, `last_day` (net_asset_value, total_net_assets, shareholders, date).
 
@@ -140,11 +301,23 @@ buscafondos tac <asset_id>
 
 ---
 
-### tac-history <asset_id> [-f|--from-date YYYY-MM-DD] — Historial de TAC
+### tac-history <asset_id> — Historial de TAC
 
 ```bash
 buscafondos tac-history <asset_id>
-buscafondos tac-history <asset_id> -f 2024-01-01
+buscafondos tac-history <asset_id> --limit 12 --offset 12
+```
+
+**Parámetros:**
+- `-l, --limit <n>`: Limitar número de resultados.
+- `-o, --offset <n>`: Desplazamiento para paginar.
+
+**Respuesta JSON con metadatos:**
+```json
+{
+  "meta": { "total_records": 36, "returned_records": 12, "has_more": true, "limit": 12, "offset": 12 },
+  "data": [ ... ]
+}
 ```
 
 **Retorna:** Serie temporal mensual de `expense_ratio` con `date`.
@@ -163,12 +336,21 @@ buscafondos tac-history <asset_id> -f 2024-01-01
 buscafondos days <asset_id>
 buscafondos days <asset_id> --from-date 2024-01-01
 buscafondos days <asset_id> --limit 365
+buscafondos days <asset_id> --limit 30 --offset 30
 ```
 
 **Parámetros:**
-
 - `--from-date <date>`: Fecha de inicio en formato `YYYY-MM-DD`.
 - `-l, --limit <n>`: Limitar número de resultados (por defecto descarga últimos 30 días, pero siempre muestra los últimos 30 de los descargados).
+- `-o, --offset <n>`: Desplazamiento para paginar sobre la serie histórica.
+
+**Respuesta JSON con metadatos:**
+```json
+{
+  "meta": { "total_records": 730, "returned_records": 30, "has_more": true, "limit": 30, "offset": 30 },
+  "data": [ ... ]
+}
+```
 
 **Retorna:** Serie temporal diaria de `price` (valor cuota) con `date`. Útil para calcular retornos manualmente o graficar la evolución del precio.
 
@@ -183,7 +365,7 @@ buscafondos returns <asset_id> --from-date 2024-01-01
 
 **Parámetros:**
 
-- `-f, --from-date <date>`: Fecha de inicio en formato `YYYY-MM-DD`.
+- `-f, --from-date <date>`: Fecha de inicio en formato `YYYY-MM-DD`. (Nota: este parámetro es aceptado pero actualmente no filtra los datos — siempre retorna la rentabilidad anualizada completa.)
 
 **Retorna:** Rentabilidades anualizadas a 1Y y 3Y basadas en la serie de precios. Muestra el valor cuota actual, la rentabilidad anualizada y la variación total.
 
@@ -214,26 +396,49 @@ buscafondos all-funds
 buscafondos all-funds --category equity
 buscafondos all-funds --category money_market --date 2026-03-31
 buscafondos all-funds --limit 100
+buscafondos all-funds --limit 10 --offset 20
+buscafondos all-funds --search "Renta"
+buscafondos all-funds --agf "Fintual"
+buscafondos all-funds --max-tac 0.02
+buscafondos all-funds --min-patrimony 1000
+buscafondos all-funds --category equity --sort-by tac --order asc --limit 5
 ```
 
 **Parámetros:**
 - `-c, --category <category>`: Filtrar por categoría.
 - `-d, --date <date>`: Fecha en formato `YYYY-MM-DD`.
 - `-l, --limit <n>`: Limitar número de resultados.
+- `-o, --offset <n>`: Desplazamiento para paginar. Permite iterar sobre resultados en ventanas controladas.
+- `-s, --search <text>`: Buscar por nombre de fondo directamente en servidor (reduce descarga completa).
+- `--agf <name>`: Filtrar por nombre de AGF.
+- `--max-tac <number>`: Filtrar fondos con TAC menor o igual al valor especificado (ej: `0.02` = 2%).
+- `--min-patrimony <number>`: Filtrar fondos con patrimonio mínimo en miles de pesos.
+- `--sort-by <field>`: Ordenar por campo (`tac`, `patrimony`, `fundName`, `agf`, `dailyChange`, `monthlyChange`).
+- `--order <direction>`: Dirección de ordenamiento (`asc` o `desc`). Por defecto `asc`.
+
+**Respuesta JSON con metadatos:**
+```json
+{
+  "meta": { "total_records": 850, "returned_records": 5, "has_more": true, "limit": 5, "offset": 0 },
+  "data": [ ... ]
+}
+```
 
 **Retorna:** Lista de todos los fondos vigentes del mercado. Cada registro incluye `run`, `fundName`, `agf`, `category`, `tac` (expense_ratio), `dailyChange` (variación % de hoy), `monthlyChange` (variación % del mes), `patrimony` (millones de pesos), `shareholders`.
 
 **Formato de fechas:** ISO 8601 (`YYYY-MM-DD`). No usar otros formatos.
 
-**Cómo usarlo:** Este es el comando principal de _screening_ cuantitativo. El agente debe usar `jq` para filtrar los resultados antes de procesarlos. Ejemplo:
+**Cómo usarlo — Screening optimizado para LLM:** Este comando acepta filtros nativos que procesan datos en servidor. El LLM debe usar estas opciones para reducir la ventana de contexto en lugar de descargar todo y filtrar con `jq`:
 
 ```bash
-buscafondos all-funds --category equity | jq '.data[] | select(.tac < 0.025)'
+# Correcto: el servidor filtra y ordena — respuesta pequeña y exacta
+buscafondos all-funds --category equity --sort-by tac --order asc --limit 5 --json
+
+# Incorrecto para encontrar "los 5 más baratos": descargar todos y filtrar localmente
+buscafondos all-funds --category equity --json | jq '.data[] | sort_by(.tac) | .[0:5]'
 ```
 
-**NUNCA imprimas el JSON completo** — usa `jq` para obtener solo los registros relevantes.
-
-**Descubrimiento de categorías:** En lugar de asumir categorías, el agente debe extraerlas de la respuesta de `all-funds` agrupando por el campo `category`. Las categorías posibles se descubren en _runtime_, no se _hardcodean_.
+**Importante:** Cuando `--sort-by` retorna `has_more: false`, el resultado está completo. Cuando `has_more: true`, deben paginar con `--offset` para obtener más resultados ordenados.
 
 ---
 
@@ -243,7 +448,14 @@ buscafondos all-funds --category equity | jq '.data[] | select(.tac < 0.025)'
 buscafondos ranking --metric patrimony
 buscafondos ranking --metric shareholders
 buscafondos ranking --metric patrimony --date 2026-03-31
+buscafondos ranking --limit 10 --offset 10
 ```
+
+**Parámetros:**
+- `-m, --metric <metric>`: `patrimony` (por defecto) o `shareholders`.
+- `-d, --date <date>`: Fecha en formato `YYYY-MM-DD`.
+- `-l, --limit <n>`: Limitar número de resultados.
+- `-o, --offset <n>`: Desplazamiento para paginar.
 
 **Retorna:** Lista ordenada de AGF con `rank`, `administrator` (nombre), `total_patrimony`, `total_shareholders`, `fund_count`.
 
@@ -284,6 +496,9 @@ buscafondos cartera 10058-7
 buscafondos cartera 9570 --month 2025-02
 ```
 
+**Parámetros:**
+- `-m, --month <YYYY-MM>`: Mes específico de la cartera. (Nota: si el mes solicitado no tiene datos disponibles, retorna tabla vacía — verificar que el mes exista en el sistema.)
+
 **Retorna:** Resumen agrupado por `tipo_instrumento` con `num_holdings`, `valorizacion_nacional`, `valorizacion_extranjera`, `pct_activo_fondo`.
 
 **Interpretación:** El campo `pct_activo_fondo` indica el peso de cada tipo de instrumento sobre el total del fondo. Esta vista macro permite verificar la composición general (renta fija vs. renta variable vs. internacional) según el mandato del fondo.
@@ -297,12 +512,22 @@ buscafondos holdings 9570
 buscafondos holdings 9570 --market E
 buscafondos holdings 9570 --market N
 buscafondos holdings 9570 -l 50
+buscafondos holdings 9570 -l 20 --offset 20
 ```
 
 **Parámetros:**
 - `-m, --month <month>`: Mes (YYYY-MM).
 - `-mkt, --market <market>`: `all` (default), `N` (nacional), `E` (extranjera).
 - `-l, --limit <n>`: Limitar número de resultados.
+- `-o, --offset <n>`: Desplazamiento para paginar.
+
+**Respuesta JSON con metadatos:**
+```json
+{
+  "meta": { "total_records": 120, "returned_records": 20, "has_more": true, "limit": 20, "offset": 20, "run": "9570", "month": "2025-03" },
+  "data": [ ... ]
+}
+```
 
 **Retorna:** Lista de instrumentos en cartera con `market` (nacional/extranjera), `nemotecnico`, `emisor`, `pais`, `tipo_instrumento`, `valorizacion`, `pct_activo_fondo`.
 
