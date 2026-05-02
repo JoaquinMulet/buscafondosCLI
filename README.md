@@ -53,6 +53,13 @@ buscafondos tac <asset_id>
 # Ver métricas de riesgo
 buscafondos risk <asset_id>
 
+# Serie histórica de valores cuota
+buscafondos days <asset_id>
+buscafondos days <asset_id> --from-date 2024-01-01
+
+# Rentabilidad anualizada a 1Y y 3Y
+buscafondos returns <asset_id>
+
 # Evolución de una o más administradoras
 buscafondos evolution -a "BANCHILE ADMINISTRADORA GENERAL DE FONDOS S.A." -m patrimony -f 2024-01 -t 2024-12
 buscafondos evolution -a "SCOTIABANK CHILE S.A." -a "BANCO DE CHILE" -m shareholders
@@ -81,6 +88,8 @@ buscafondos holdings <run> --market E
 | `buscafondos series <concept_id>`                                  | Series de un fondo con su respectivo valor cuota.                          |
 | `buscafondos tac <asset_id>`                                       | Tasa Anual de Costos (TAC) de una serie.                                   |
 | `buscafondos risk <asset_id>`                                      | Métricas de riesgo (volatilidad, _drawdown_).                              |
+| `buscafondos days <asset_id> [--from-date]`                        | Serie histórica de valores cuota.                                          |
+| `buscafondos returns <asset_id> [--from-date]`                     | Rentabilidad anualizada a 1Y y 3Y.                                         |
 | `buscafondos tac-history <asset_id>`                               | Historial mensual del TAC.                                                 |
 | `buscafondos ranking [--metric patrimony\|shareholders]`           | Ranking general de las AGF.                                                |
 | `buscafondos all-funds [--category] [--date]`                      | Universo completo de fondos mutuos.                                        |
