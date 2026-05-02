@@ -7,7 +7,7 @@ allowed-tools: Bash, Read
 
 # Analisis Profesional de Fondos Mutuos en Chile
 
-Skill-guia para agentes IA que realizan analisis de fondos mutuos chilenos. Esta skill ensena al agente COMO descubrir y analizar datos via CLI, y provee el contexto de dominio necesario para interpretar correctamente cada campo de respuesta.
+Skill-guia para agentes IA que realizan analisis de fondos mutuos chilenos. Esta skill ensena al agente como descubrir y analizar datos via CLI, y provee el contexto de dominio necesario para interpretar correctamente cada campo de respuesta.
 
 ---
 
@@ -31,7 +31,7 @@ buscafondos providers
 
 **Como usarlo:** este comando es el punto de partida de cualquier analisis. No existe una lista fija de AGF — se descubre en runtime. El agente debe iterar sobre las AGF segun el objetivo del analisis.
 
-**Contexto de dominio:** una AGF (Administradora General de Fondos) es una sociedad anonima regulada bajo Ley 20.712 que administra fondos por cuenta y riesgo de los partícipes. La solidez patrimonial y la reputacion corporativa de la AGF son factores criticos en la seleccion — una AGF con problemas regulatorios puede poner en riesgo el patrimonio del fondo.
+**Contexto de dominio:** una AGF (Administradora General de Fondos) es una sociedad anonima regulada bajo Ley 20.712 que administra fondos por cuenta y riesgo de los participantes. La solidez patrimonial y la reputacion corporativa de la AGF son factores criticos en la seleccion — una AGF con problemas regulatorios puede poner en riesgo el patrimonio del fondo.
 
 ---
 
@@ -45,10 +45,10 @@ buscafondos funds <provider_id>
 
 **Como usarlo:** obtener el `provider_id` de `providers`, luego iterar sobre los fondos. Cada fondo tiene un `concept_id` necesario para consultar series.
 
-**Descubrimiento de categorias:** el campo `category` indica la clase de activo del fondo. Las categorias posibles NO deben hardcodearse — se obtienen del campo `category` de la respuesta. **Regla estricto:** bajo ninguna circunstancia el agente debe inventar, deducir o asumir categorias que no estejam explicitamente listadas en la respuesta del campo `category`. Si la API no devuelve una categoria, esa categoria no existe para efectos del analisis. Las principales categorias por contexto de dominio son:
+**Descubrimiento de categorias:** el campo `category` indica la clase de activo del fondo. Las categorias posibles NO deben hardcodearse — se obtienen del campo `category` de la respuesta. **Regla estricta:** bajo ninguna circunstancia el agente debe inventar, deducir o asumir categorias que no esten explicitamente listadas en la respuesta del campo `category`. Si la API no devuelve una categoria, esa categoria no existe para efectos del analisis. Las principales categorias por contexto de dominio son:
 
 - `money_market`: deuda corto plazo (<90 dias), vehiculo ultra-conservador
-- `equity` / `libre_inversion`: ≥90% en instrumentos de capitalizacion (acciones)
+- `equity` / `libre_inversion`: >=90% en instrumentos de capitalizacion (acciones)
 - `fixed_income`: deuda de mediano-largo plazo, expuesto a riesgo de tasa
 - `balanced`: mixto renta fija + renta variable, amplitud max 50% en capitalizacion
 
@@ -66,7 +66,7 @@ buscafondos series <concept_id>
 
 **Como usarlo:** descubrir todas las series disponibles de un fondo. Cada serie tiene su propio `asset_id` y puede tener diferente TAC. El campo `investor_class` indica si es Retail, Institucional, APV, etc.
 
-**Concepto clave — Serie de Cuotas:** un mismo fondo (misma cartera de activos) puede emitir multiples series de cuotas (A, B, C, I, APV, etc.) que se diferencian solo en costos y barrera de entrada, NO en el portafolio subyacente. La Serie A es tipicamente retail, la Serie I es institucional con alto umbral de capital. La diferencia de TAC entre series de un mismo fondo puede ser de varios puntos porcentuales y erosiona fuertemente el compuesto en el tiempo.
+**Concepto clave — Serie de Cuotas:** un mismo fondo (misma cartera de activos) puede emitir multiples series de cuotas (A, B, C, I, APV, etc.) que se diferencian solo en costos y barrera de entrada, NO en el portafolio subyacente. La Serie A es tipicamente retail, la Serie I es institucional con alto umbral de capital. La diferencia de TAC entre series de un mismo fondo puede ser de varios puntos porcentuales y erosiona fuertemente el capital compuesto en el tiempo.
 
 ---
 
@@ -131,7 +131,7 @@ buscafondos all-funds --category money_market --date 2026-03-31
 
 **Retorna:** lista de todos los fondos vigentes del mercado. Cada registro incluye todos los campos de `series` mas `dailyChange` (variacion % hoy), `monthlyChange` (variacion % mes), `tac` (expense_ratio), `patrimony` (millones de pesos), `shareholders`, metricas de riesgo completas, y `category`.
 
-**Como usarlo:** este es el comando principal de screening cuantitativo. El agente puede filtrar mentalmente los resultados por los criterios del analisis — TAC aceptable, categoria objetivo, nivel de riesgo, variacion diaria/mensual. El resultado es una lista de candidatos para analisis profundo posterior.
+**Como usarlo:** este es el comando principal de screening cuantitativo. El agente puede filtrar mentalmente los resultados por los criterios del analisis: TAC aceptable, categoria objetivo, nivel de riesgo, variacion diaria/mensual. El resultado es una lista de candidatos para analisis profundo posterior.
 
 **Descubrimiento de categorias:** en lugar de asumir categorias, el agente debe extraerlas de la respuesta de `all-funds` agrupando por el campo `category`. Las categorias posibles se descubren en runtime, no se hardcodifican.
 
@@ -147,9 +147,9 @@ buscafondos ranking --metric patrimony --date 2026-03-31
 
 **Retorna:** lista ordenada de AGF con `rank`, `administrator` (nombre), `total_patrimony`, `total_shareholders`, `fund_count`.
 
-**Interpretacion:** el ranking por patrimonio revela concentracion de mercado — las 5 mayores AGF suelen acumular la mayoria del AUM. El ranking por partícipes indica que AGF esta captando hogares. Una divergencia entre ambos (alto patrimonio, baja base de partícipes) indica concentracion institucional — riesgo de flujos masivos de un solo cliente.
+**Interpretacion:** el ranking por patrimonio revela concentracion de mercado — las 5 mayores AGF suelen acumular la mayoria del AUM. El ranking por participantes indica que AGF esta captando hogares. Una divergencia entre ambos (alto patrimonio, baja base de participantes) indica concentracion institucional: riesgo de flujos masivos de un solo cliente.
 
-**Contexto de dominio:** la concentracion de mercado es relevante para el analisis de competencia. AGF con patrimonios pequeños pueden tener dificultades para lograr economias de escala, elevando su TAC minima.
+**Contexto de dominio:** la concentracion de mercado es relevante para el analisis de competencia. AGF con patrimonios pequenos pueden tener dificultades para lograr economias de escala, elevando su TAC minima.
 
 ---
 
@@ -161,7 +161,7 @@ buscafondos evolution "BANCHILE ADMINISTRADORA GENERAL DE FONDOS S.A." "SCOTIABA
 
 **Retorna:** serie temporal mensual pivotada por AGF con valores de `patrimony` o `shareholders` segun `metric`.
 
-**Para que sirve:** analizar tendencias de crecimiento o contraction patrimonial de una o varias AGF en el tiempo. Permite identificar cuáles AGF están ganando o perdiendo масштаб y si existen correlaciones entre flujos de distintas AGF.
+**Para que sirve:** analizar tendencias de crecimiento o contraction patrimonial de una o varias AGF en el tiempo. Permite identificar quais AGF estan ganando o perdiendo tamano y si existen correlaciones entre flujos de distintas AGF.
 
 ---
 
@@ -206,22 +206,22 @@ No es valido comparar el rendimiento de un fondo money market con uno accionario
 - **Denominacion monetaria** (CLP, USD, EUR)
 - **Serie** (Retail, Institucional, APV)
 
-El agente debe siempre asegurar que los fondos comparados pertenezcan al mismo peer group antes de emitir juicios relatives de desempeño.
+El agente debe siempre asegurar que los fondos comparados pertenezcan al mismo peer group antes de emitir juicios relativos de desempeno.
 
-### Benchmark y Valorization
+### Benchmark y Valorizacion
 
-Los fondos de deuda en Chile se valorizan con precios de proveedores como RiskAmerica o LVA Indices, no con Precios de mercado directo. Esto es relevante porque el mercado secundario de deuda corporativa chileno adolece de problemas de liquidez. El agente debe saber que los valores cuota diarios reflejan mark-to-market segun curvas de rendimiento de estos proveedores, no necesariamente precios de transaccion real.
+Los fondos de deuda en Chile se valorizan con precios de proveedores como RiskAmerica o LVA Indices, no con precios de mercado directo. Esto es relevante porque el mercado secundario de deuda corporativa chileno adolece de problemas de liquidez. El agente debe saber que los valores cuota diarios reflejan mark-to-market segun curvas de rendimiento de estos proveedores, no necesariamente precios de transaccion real.
 
 Para fondos de renta variable, el benchmark es tipicamente un indice de LVA Indices o RiskAmerica (ej: LVAZCS3B para deuda corporativa corto plazo BBB).
 
-### Return y Riesgo: Ratios Derivados
+### Retorno y Riesgo: Ratios Derivados
 
 La API devuelve metricas de riesgo en bruto. El agente debe saber calcular o interpretar las siguientes metricas derivadas:
 
 **Sharpe Ratio:**
 $$\text{Sharpe} = \frac{R_p - R_f}{\sigma_p}$$
 
-Donde $R_p$ = retorno promedio anualizado del fondo, $R_f$ = tasa libre de riesgo (en Chile usar TPM del Banco Central de Chile o rendimiento de bonos BCU/BCP segun el horizonte), $\sigma_p$ = desviacion estandar annualized de los retornos del fondo. Un Sharpe > 1.0 es excelente. Sharpe < 0.5 indica que el fondo no es recompensado adecuadamente por el riesgo asumido.
+Donde $R_p$ = retorno promedio anualizado del fondo, $R_f$ = tasa libre de riesgo (en Chile usar TPM del Banco Central de Chile o rendimiento de bonos BCU/BCP segun el horizonte), $\sigma_p$ = desviacion estandar anualizada de los retornos del fondo. Un Sharpe > 1.0 es excelente. Sharpe < 0.5 indica que el fondo no es recompensado adecuadamente por el riesgo asumido.
 
 **Downside Capture:**
 $$\text{DownsideCapture} = \frac{R_{\text{gestor}}(R_{\text{bench}} < 0)}{R_{\text{bench}}(R_{\text{bench}} < 0)}$$
@@ -251,9 +251,9 @@ El agente debe conocer el marco tributario para orientar analisis y comparacione
 
 **Art. 108 LIR — Traslado entre fondos:** las ganancias de capital se arrastran contablemente al nuevo fondo cuando se traspasa entre fondos (incluso de distintas AGF), sin tributar hasta el rescate final. Esto permite rebalancear portafolios sin costo fiscal intermedio.
 
-**Art. 107 LIR (modificado por Ley 21.420):** las ganancias en fondos mutuos con presencia bursatil tributan a un impuesto unico y definitivo del 10%, en lugar de la tasa marginal del IGC que puede llegar al 40%. Este es un arbitrage fiscal significativo para inversionistas de alto patrimonio.
+**Art. 107 LIR (modificado por Ley 21.420):** las ganancias en fondos mutuos con presencia bursatil tributan a un impuesto unico y definitivo del 10%, en lugar de la tasa marginal del IGC que puede llegar al 40%. Este es un arbitraje fiscal significativo para inversionistas de alto patrimonio.
 
-**Art. 57 LIR:** las ganancias en fondos mutuos estan exentas del IGC si el resgate anual es menor a 30 UTM.
+**Art. 57 LIR:** las ganancias en fondos mutuos estan exentas del IGC si el rescate anual es menor a 30 UTM.
 
 **APV:** series exclusivas de ahorro previsional voluntario. El regimen Letra A otorga bonificacion estatal del 15% sobre el ahorro. El regimen Letra B permite rebajar la base imponible.
 
@@ -267,7 +267,7 @@ El agente debe conocer el marco tributario para orientar analisis y comparacione
 2. Filtrar mentalmente por TAC aceptable, nivel de riesgo, patrimonio minimo
 3. Seleccionar 3-5 candidatos para analisis profundo
 
-### Objetivo: Seleccion de Serie Óptima
+### Objetivo: Seleccion de Serie Optima
 
 1. Para cada candidato, ejecutar `series <concept_id>` para ver todas las series disponibles
 2. Para cada serie, ejecutar `tac <asset_id>` para comparar costos
@@ -276,26 +276,26 @@ El agente debe conocer el marco tributario para orientar analisis y comparacione
 ### Objetivo: Analisis de Cartera y Diversificacion
 
 1. Para el fondo seleccionado, ejecutar `cartera <run>` para ver la composicion macro por tipo de instrumento (renta fija, renta variable, internacional)
-2. Ejecutar `holdings <run>` y verificar que **ningun emisor individual** supere el 25% del `pct_activo_fondo`. Este es el limite regulatorio de la Ley 20.712 — aplica al emisor, no al tipo de instrumento
-3. Verificar exposure extranjero con `holdings <run> --market E` para evaluar riesgo cambiario
+2. Ejecutar `holdings <run>` y verificar que **ningun emisor individual** supere el 25% del `pct_activo_fondo`. Este es el limite regulatorio de la Ley 20.712: aplica al emisor, no al tipo de instrumento
+3. Verificar exposition extranjero con `holdings <run> --market E` para evaluar riesgo cambiario
 
 ### Objetivo: Analisis de AGF
 
 1. Ejecutar `ranking --metric patrimony` y `ranking --metric shareholders`
 2. Comparar posicion relativa de la AGF en ambos rankings
-3. Divergencia entre patrimonio alto y partícipes bajos = riesgo de concentracion institucional
+3. Divergencia entre patrimonio alto y participantes bajos = riesgo de concentracion institucional
 
 ### Objetivo: Analisis de Evolucion Historica
 
 1. Ejecutar `evolution` para una o varias AGF
-2. Analizar tendencias de patrimonio o partícipes en el tiempo
+2. Analizar tendencias de patrimonio o participantes en el tiempo
 3. Identificar si hay contracciones patrimoniales sostenidas (senal de problemas)
 
 ---
 
 ## Notas sobre la API
 
-- Los IDs que usa la API son CRC32 de identificadores originales de la CMF — no son arbitrarios, son derivables
+- Los IDs que usa la API son CRC32 de identificadores originales de la CMF: no son arbitrarios, son derivables
 - Los datos son publicos y provenance de la CMF Chile
-- Las metricas de riesgo son snapshots — verificar `as_of_date` para confirmar vigencia
+- Las metricas de riesgo son snapshots: verificar `as_of_date` para confirmar vigencia
 - Para due diligence cualitativa de una AGF (gobierno corporativo, conflictos de agencia, rotacion de equipo), se requiere informacion adicional fuera de esta API (cuestionarios DDQ, infos publicas de la CMF)

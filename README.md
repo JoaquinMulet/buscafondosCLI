@@ -1,10 +1,10 @@
 # BuscaFondos CLI
 
-CLI de linea de comandos para consultar y analizar fondos mutuos chilenos, consumiendo la API publica de [BuscaFondos](https://buscafondos.com) basada en datos de la CMF.
+CLI de linea de comandos para consultar y analizar fondos mutuos chilenos con datos publicos de la CMF.
 
 ## Que es
 
-BuscaFondos CLI permite a agentes IA, desarrolladores e investigadores acceder a datos del mercado de fondos mutuos chilenos sin necesidad de usar el navegador ni consumir la API REST directamente. Todo se hace desde la terminal.
+BuscaFondos CLI permite a desarrolladores e investigadores acceder a datos del mercado de fondos mutuos chilenos desde la terminal, sin navegador ni API REST.
 
 Datos disponibles:
 
@@ -16,12 +16,6 @@ Datos disponibles:
 - Composicion de cartera (holdings)
 
 ## Instalacion
-
-### Desde PyPI (proximo)
-
-```bash
-pip install buscafondos
-```
 
 ### Desde el repo
 
@@ -73,35 +67,6 @@ buscafondos cartera <run>
 buscafondos holdings <run> --market E
 ```
 
-## Integracion con Agentes IA
-
-Para agentes IA que consumen la API como libreria Python:
-
-```python
-from buscafondos.api import BuscaFondosClient
-
-client = BuscaFondosClient()
-
-# Estado del servicio
-health = client.health()
-
-# Todas las AGF
-providers = client.list_providers()
-
-# Todos los fondos del mercado
-all_funds = client.list_all_funds(category="equity")
-
-# Ranking AGF
-ranking = client.ranking(metric="patrimony")
-
-# Cartera de un fondo
-cartera = client.cartera_resumen("9570")
-
-client.close()
-```
-
-Todos los metodos retornan diccionarios Python con la respuesta JSON de la API.
-
 ## Comandos disponibles
 
 | Comando | Descripcion |
@@ -118,13 +83,11 @@ Todos los metodos retornan diccionarios Python con la respuesta JSON de la API.
 | `buscafondos cartera <run> [--month]` | Resumen de cartera por instrumento |
 | `buscafondos holdings <run> [--market] [--month]` | Holdings individuales |
 
-## Skill para Agentes IA (Claude Code, Kilo, etc.)
+## Skill para Agentes IA
 
-El CLI viene con una **skill** lista para instalar en tu proyecto de agente IA. Esta skill le da al agente todo el contexto de dominio necesario para realizar analisis profesionales de fondos mutuos chilenos — taxonomia de categorias, limites regulatorios, formulas de riesgo, beneficios tributarios, y el flujo analitico completo.
+El CLI viene con una **skill** lista para instalar en tu proyecto de agente IA. Esta skill le da al agente todo el contexto de dominio necesario para realizar analisis profesionales de fondos mutuos chilenos: taxonomia de categorias, limites regulatorios, formulas de riesgo, beneficios tributarios y el flujo analitico completo.
 
 ### Instalar la skill
-
-**Para Kilo / Claude Code** — copia la carpeta `skills/buscafondos/` a tu directorio de skills del proyecto:
 
 ```bash
 # En tu proyecto de agente IA
@@ -144,7 +107,7 @@ cp -r skills/buscafondos <tu-proyecto>/.claude/skills/
 - Contexto de dominio: Ley 20.712, limites regulatorios, taxonomia de fondos
 - Formulas de metricas: Sharpe, Treynor, Information Ratio, Downside Capture
 - Marco tributario: Art. 108 LIR (traslado entre fondos), Art. 107 LIR (impuesto 10%), APV
-- Flujo analitico completo: screening → seleccion de serie → analisis de cartera → metricas de riesgo
+- Flujo analitico completo: screening, seleccion de serie, analisis de cartera, metricas de riesgo
 - Reglas anti-alucinacion: el agente nunca debe inventar categorias que no esten en la respuesta de la API
 - Calculo obligatorio de **fee drag** al recomendar una serie
 
