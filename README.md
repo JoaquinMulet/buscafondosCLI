@@ -8,7 +8,7 @@ BuscaFondos CLI permite a desarrolladores e investigadores acceder a datos del m
 
 Datos disponibles:
 
-- **22+ administradoras (AGF)** registradas
+- **23+ administradoras (AGF)** registradas
 - **1.900+ series de fondos** vigentes
 - **6+ años de datos históricos**
 - Valor cuota diario, TAC, patrimonio, partícipes
@@ -17,19 +17,17 @@ Datos disponibles:
 
 ## Instalación
 
-### Desde el repo
-
 ```bash
-pip install git+https://github.com/JoaquinMulet/buscafondosCLI.git
+npm install -g git+https://github.com/JoaquinMulet/buscafondosCLI.git
 ```
 
-### Desarrollo local
+O desarrollo local:
 
 ```bash
 git clone https://github.com/JoaquinMulet/buscafondosCLI.git
 cd buscafondosCLI
-uv sync
-uv run pytest tests/
+npm install
+npm start -- health
 ```
 
 ## Uso rápido
@@ -58,7 +56,7 @@ buscafondos ranking --metric patrimony
 
 # Todos los fondos del mercado
 buscafondos all-funds
-buscafondos all-funds --category equity
+buscafondos all-funds --category money_market
 
 # Resumen de cartera de un fondo
 buscafondos cartera <run>
@@ -90,26 +88,8 @@ El CLI viene con una **skill** lista para instalar en tu proyecto de agente IA. 
 ### Instalar la skill
 
 ```bash
-# En tu proyecto de agente IA
 cp -r skills/buscafondos <tu-proyecto>/.claude/skills/
 ```
-
-También puedes clonar directamente:
-
-```bash
-git clone https://github.com/JoaquinMulet/buscafondosCLI.git
-cp -r skills/buscafondos <tu-proyecto>/.claude/skills/
-```
-
-### Qué incluye la skill
-
-- Descripción de todos los comandos CLI y cómo interpretarlos
-- Contexto de dominio: Ley 20.712, límites regulatorios, taxonomía de fondos
-- Fórmulas de métricas: Sharpe, Treynor, Information Ratio, Downside Capture
-- Marco tributario: Art. 108 LIR (traslado entre fondos), Art. 107 LIR (impuesto 10%), APV
-- Flujo analítico completo: screening, selección de serie, análisis de cartera, métricas de riesgo
-- Reglas anti-alucinación: el agente nunca debe inventar categorías que no estén en la respuesta de la API
-- Cálculo obligatorio de **fee drag** al recomendar una serie
 
 ## Fuente de datos
 

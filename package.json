@@ -1,0 +1,23 @@
+{
+  "name": "buscafondos",
+  "version": "1.0.0",
+  "description": "CLI para consultar fondos mutuos chilenos via API de BuscaFondos",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "buscafondos": "src/cli.js"
+  },
+  "scripts": {
+    "start": "node src/cli.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "chalk": "^5.3.0",
+    "commander": "^12.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["chile", "fondos-mutuos", "cli", "finance"],
+  "license": "MIT"
+}
