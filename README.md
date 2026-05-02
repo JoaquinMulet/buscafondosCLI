@@ -70,6 +70,11 @@ buscafondos ranking --metric patrimony
 # Listar todos los fondos del mercado
 buscafondos all-funds
 buscafondos all-funds --category money_market
+buscafondos all-funds --limit 100
+
+# Guardar resultados a archivo
+buscafondos all-funds --output fondos.json
+buscafondos providers --json --output agfs.json
 
 # Resumen de la cartera de un fondo
 buscafondos cartera <run>
@@ -83,19 +88,27 @@ buscafondos holdings <run> --market E
 | Comando                                                            | Descripción                                                                |
 | ------------------------------------------------------------------ | -------------------------------------------------------------------------- |
 | `buscafondos health`                                               | Estado del servicio y fecha de la última extracción de datos (_scraping_). |
-| `buscafondos providers`                                            | Lista todas las Administradoras Generales de Fondos (AGF).                 |
-| `buscafondos funds <provider_id>`                                  | Fondos pertenecientes a una AGF.                                           |
-| `buscafondos series <concept_id>`                                  | Series de un fondo con su respectivo valor cuota.                          |
+| `buscafondos providers [--limit n]`                                | Lista todas las Administradoras Generales de Fondos (AGF).                 |
+| `buscafondos funds <provider_id> [--limit n]`                     | Fondos pertenecientes a una AGF.                                           |
+| `buscafondos series <concept_id> [--limit n]`                     | Series de un fondo con su respectivo valor cuota.                          |
 | `buscafondos tac <asset_id>`                                       | Tasa Anual de Costos (TAC) de una serie.                                   |
 | `buscafondos risk <asset_id>`                                      | Métricas de riesgo (volatilidad, _drawdown_).                              |
-| `buscafondos days <asset_id> [--from-date]`                        | Serie histórica de valores cuota.                                          |
-| `buscafondos returns <asset_id> [--from-date]`                     | Rentabilidad anualizada a 1Y y 3Y.                                         |
-| `buscafondos tac-history <asset_id>`                               | Historial mensual del TAC.                                                 |
-| `buscafondos ranking [--metric patrimony\|shareholders]`           | Ranking general de las AGF.                                                |
-| `buscafondos all-funds [--category] [--date]`                      | Universo completo de fondos mutuos.                                        |
+| `buscafondos days <asset_id> [--from-date] [--limit n]`           | Serie histórica de valores cuota.                                          |
+| `buscafondos returns <asset_id> [--from-date]`                    | Rentabilidad anualizada a 1Y y 3Y.                                          |
+| `buscafondos tac-history <asset_id> [-f|--from-date]`             | Historial mensual del TAC.                                                  |
+| `buscafondos ranking [--metric patrimony\|shareholders] [--date]` | Ranking general de las AGF.                                                 |
+| `buscafondos all-funds [--category] [--date] [--limit n]`         | Universo completo de fondos mutuos.                                         |
 | `buscafondos cartera <run> [--month]`                              | Resumen de la cartera por instrumento.                                     |
-| `buscafondos holdings <run> [--market] [--month]`                  | Activos individuales (_holdings_).                                         |
+| `buscafondos holdings <run> [--market] [--month] [--limit n]`     | Activos individuales (_holdings_).                                         |
 | `buscafondos evolution -a <admin> [-a <admin2>]... [-m] [-f] [-t]` | Evolución mensual de una o más AGF.                                        |
+
+## Flags globales
+
+| Flag | Descripción |
+| ---- | ----------- |
+| `-j, --json` | Output en formato JSON puro (para piping con `jq`) |
+| `-o, --output <file>` | Guardar resultado a archivo (JSON si es JSON, o tabla formateada) |
+| `-l, --limit <n>` | Limitar número de resultados en comandos de lista |
 
 ## _Skill_ para Agentes de IA
 

@@ -19,17 +19,21 @@ El CLI `buscafondos` es la única interfaz de acceso a los datos. Todos los coma
 
 **CRÍTICO — Rentabilidad ya incluye TAC:** La rentabilidad que publica el fondo (y que devuelve el CLI) ES la rentabilidad neta después de descontar la TAC. NO restes la TAC nuevamente. Sería un error grave duplicar este descuento. Si necesitas comparar dos fondos, usa directamente su rentabilidad publicada.
 
-**Filtrado de resultados JSON:** Dado que los comandos devuelven JSON, SIEMPRE usa `jq` para filtrar grandes volúmenes de datos directamente en Bash antes de procesarlos. Ejemplo:
+**Filtrado de resultados:** El CLI soporta output JSON con el flag `--json` o guardar a archivo con `--output`. Para filtrar grandes volúmenes, usar estos flags con `jq`:
 
 ```bash
-buscafondos all-funds | jq '.data[] | select(.attributes.category == "equity")'
-buscafondos all-funds | jq '.data[] | select(.attributes.tac < 0.02)'
-buscafondos all-funds | jq '.data | length'
+# Output JSON directo para piping
+buscafondos all-funds --json | jq '.data[] | select(.category == "equity")'
+
+# Guardar a archivo y luego filtrar
+buscafondos all-funds --output fondos.json
+cat fondos.json | jq '.data[] | select(.tac < 0.02)'
+
+# Contar registros
+buscafondos all-funds --json | jq '.data | length'
 ```
 
-````
-
-**NUNCA imprimas el JSON completo de `all-funds` en la terminal.** Filtra primero con `jq` para obtener solo los registros relevantes.
+**Regla: NUNCA imprimas el JSON completo de `all-funds` en la terminal sin filtrar.**
 
 **Cálculos matemáticos:** Para calcular el _Sharpe Ratio_, _downside capture_, o cualquier otra métrica que requiera precisión, NO intentes hacer el cálculo mentalmente. Usa herramientas de Bash:
 
@@ -61,7 +65,11 @@ buscafondos health
 
 ```bash
 buscafondos providers
+buscafondos providers --limit 10
 ```
+
+**Parámetros:**
+- `-l, --limit <n>`: Limitar número de resultados.
 
 **Retorna:** Lista de todas las administradoras con `id` (CRC32) y `name`.
 
@@ -75,7 +83,11 @@ buscafondos providers
 
 ```bash
 buscafondos funds <provider_id>
+buscafondos funds <provider_id> --limit 20
 ```
+
+**Parámetros:**
+- `-l, --limit <n>`: Limitar número de resultados.
 
 **Retorna:** Lista de fondos de una AGF con `id` (concept_id), `run`, `name`, `category`.
 
@@ -96,7 +108,11 @@ El agente debe usar estas definiciones para interpretar lo que el CLI devuelve, 
 
 ```bash
 buscafondos series <concept_id>
+buscafondos series <concept_id> --limit 10
 ```
+
+**Parámetros:**
+- `-l, --limit <n>`: Limitar número de resultados.
 
 **Retorna:** Series de un fondo con `id` (asset_id), `name`, `serie` (letra), `investor_class`, `last_day` (net_asset_value, total_net_assets, shareholders, date).
 
@@ -124,11 +140,11 @@ buscafondos tac <asset_id>
 
 ---
 
-### tac-history <asset_id> --from-date YYYY-MM-DD — Historial de TAC
+### tac-history <asset_id> [-f|--from-date YYYY-MM-DD] — Historial de TAC
 
 ```bash
 buscafondos tac-history <asset_id>
-buscafondos tac-history <asset_id> --from-date 2024-01-01
+buscafondos tac-history <asset_id> -f 2024-01-01
 ```
 
 **Retorna:** Serie temporal mensual de `expense_ratio` con `date`.
@@ -146,11 +162,13 @@ buscafondos tac-history <asset_id> --from-date 2024-01-01
 ```bash
 buscafondos days <asset_id>
 buscafondos days <asset_id> --from-date 2024-01-01
+buscafondos days <asset_id> --limit 365
 ```
 
 **Parámetros:**
 
 - `--from-date <date>`: Fecha de inicio en formato `YYYY-MM-DD`.
+- `-l, --limit <n>`: Limitar número de resultados (por defecto descarga últimos 30 días, pero siempre muestra los últimos 30 de los descargados).
 
 **Retorna:** Serie temporal diaria de `price` (valor cuota) con `date`. Útil para calcular retornos manualmente o graficar la evolución del precio.
 
@@ -165,7 +183,7 @@ buscafondos returns <asset_id> --from-date 2024-01-01
 
 **Parámetros:**
 
-- `--from-date <date>`: Fecha de inicio en formato `YYYY-MM-DD`.
+- `-f, --from-date <date>`: Fecha de inicio en formato `YYYY-MM-DD`.
 
 **Retorna:** Rentabilidades anualizadas a 1Y y 3Y basadas en la serie de precios. Muestra el valor cuota actual, la rentabilidad anualizada y la variación total.
 
@@ -195,7 +213,13 @@ buscafondos risk <asset_id>
 buscafondos all-funds
 buscafondos all-funds --category equity
 buscafondos all-funds --category money_market --date 2026-03-31
+buscafondos all-funds --limit 100
 ```
+
+**Parámetros:**
+- `-c, --category <category>`: Filtrar por categoría.
+- `-d, --date <date>`: Fecha en formato `YYYY-MM-DD`.
+- `-l, --limit <n>`: Limitar número de resultados.
 
 **Retorna:** Lista de todos los fondos vigentes del mercado. Cada registro incluye `run`, `fundName`, `agf`, `category`, `tac` (expense_ratio), `dailyChange` (variación % de hoy), `monthlyChange` (variación % del mes), `patrimony` (millones de pesos), `shareholders`.
 
@@ -270,7 +294,13 @@ buscafondos cartera 9570 --month 2025-02
 buscafondos holdings 9570
 buscafondos holdings 9570 --market E
 buscafondos holdings 9570 --market N
+buscafondos holdings 9570 -l 50
 ```
+
+**Parámetros:**
+- `-m, --month <month>`: Mes (YYYY-MM).
+- `-mkt, --market <market>`: `all` (default), `N` (nacional), `E` (extranjera).
+- `-l, --limit <n>`: Limitar número de resultados.
 
 **Retorna:** Lista de instrumentos en cartera con `market` (nacional/extranjera), `nemotecnico`, `emisor`, `pais`, `tipo_instrumento`, `valorizacion`, `pct_activo_fondo`.
 
