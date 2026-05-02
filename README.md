@@ -48,8 +48,12 @@ buscafondos series <concept_id>
 # Ver el TAC de una serie
 buscafondos tac <asset_id>
 
-# Ver métricas de riesgo
+# Ver metricas de riesgo
 buscafondos risk <asset_id>
+
+# Evolucion de una o mas administradoras
+buscafondos evolution -a "BANCHILE ADMINISTRADORA GENERAL DE FONDOS S.A." -m patrimony -f 2024-01 -t 2024-12
+buscafondos evolution -a "SCOTIABANK CHILE S.A." -a "BANCO DE CHILE" -m shareholders
 
 # Ranking de AGF por patrimonio
 buscafondos ranking --metric patrimony
@@ -80,8 +84,9 @@ buscafondos holdings <run> --market E
 | `buscafondos all-funds [--category] [--date]` | Universo completo de fondos |
 | `buscafondos cartera <run> [--month]` | Resumen de cartera por instrumento |
 | `buscafondos holdings <run> [--market] [--month]` | Holdings individuales |
+| `buscafondos evolution -a <admin> [-a <admin2>]... [-m] [-f] [-t]` | Evolucion mensual de AGF |
 
-## Skill para Agentes IA
+## SKILL para Agentes IA
 
 El CLI viene con una **skill** lista para instalar en tu proyecto de agente IA. Esta skill le da al agente todo el contexto de dominio necesario para realizar análisis profesionales de fondos mutuos chilenos: taxonomía de categorías, límites regulatorios, fórmulas de riesgo, beneficios tributarios y el flujo analítico completo.
 

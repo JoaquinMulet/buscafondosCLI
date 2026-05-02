@@ -11,15 +11,45 @@ Skill-guía para agentes IA que realizan análisis de fondos mutuos chilenos. Es
 
 ---
 
-## Arquitectura de la API y Recursos Disponibles
+## Arquitectura del CLI y Recursos Disponibles
 
-La API de BuscaFondos provee datos públicos de la CMF. Todos los comandos devuelven JSON con estructura `data` + `attributes`. El agente debe tratar cada respuesta como una fuente de datos dinámica, no como valores estáticos.
+El CLI `buscafondos` es la única interfaz de acceso a los datos. Todos los comandos devuelven JSON con estructura `data` + `attributes`. El agente debe tratar cada respuesta como una fuente de datos dinámica, no como valores estáticos.
 
-**Base de descubrimiento:** antes de cualquier análisis, el agente debe descubrir el universo disponible ejecutando comandos en secuencia lógica. Nunca asumir que se conoce la lista de AGF, categorías o fondos — siempre consultarla vía API.
+**Base de descubrimiento:** antes de cualquier análisis, el agente debe descubrir el universo disponible ejecutando comandos en secuencia lógica. Nunca asumir que se conoce la lista de AGF, categorías o fondos — siempre consultarla vía CLI.
+
+**CRÍTICO — Rentabilidad ya incluye TAC:** la rentabilidad que publica el fondo (y que devuelve el CLI) ES la rentabilidad neta después de descontar la TAC. NO restaes la TAC nuevamente. Sería un error grave duplicar el descuento. Si necesitas comparar dos fondos, usas directamente su rentabilidad publicada.
+
+**Filtrado de resultados JSON:** dado que los comandos devuelven JSON, SIEMPRE usa `jq` para filtrar grandes volúmenes de datos directamente en Bash antes de procesarlos. Ejemplo:
+```bash
+buscafondos all-funds | jq '.data[] | select(.attributes.category == "equity")'
+buscafondos all-funds | jq '.data[] | select(.attributes.tac < 0.02)'
+buscafondos all-funds | jq '.data | length'
+```
+**NUNCA imprimas el JSON completo de `all-funds` en la terminal.** Filtra primero con jq para obtener solo los registros relevantes.
+
+**Cálculos matemáticos:** para calcular Sharpe Ratio, downside capture, o cualquier otra métrica que requiera precisión, NO intentes el cálculo mentalmente. Usa herramientas de Bash:
+```bash
+# Sharpe Ratio con awk
+awk 'BEGIN { Rp=0.07; Rf=0.05; sigma=0.12; printf "%.2f\n", (Rp - Rf) / sigma }'
+
+# node -e para cálculos complejos
+node -e "console.log(Math.sqrt(12) * 0.045)"
+```
+Si ninguno está disponible, declara explícitamente que no puedes calcular y explica la fórmula al usuario.
 
 ---
 
 ## Comandos de Descubrimiento
+
+### health — Estado del servicio
+
+```bash
+buscafondos health
+```
+
+**Retorna:** `status` (ok/error), `last_scraped_date`, `total_records`. Útil para verificar que la API está activa antes de ejecutar comandos de análisis.
+
+---
 
 ### providers — Identificar AGF del sistema
 
@@ -45,14 +75,14 @@ buscafondos funds <provider_id>
 
 **Cómo usarlo:** obtener el `provider_id` de `providers`, luego iterar sobre los fondos. Cada fondo tiene un `concept_id` necesario para consultar series.
 
-**Descubrimiento de categorías:** el campo `category` indica la clase de activo del fondo. Las categorías posibles NO deben hardcodearse — se obtienen del campo `category` de la respuesta. **Regla estricta:** bajo ninguna circunstancia el agente debe inventar, deducir o asumir categorías que no estén explícitamente listadas en la respuesta del campo `category`. Si la API no devuelve una categoría, esa categoría no existe para efectos del análisis. Las principales categorías por contexto de dominio son:
+**Descubrimiento de categorías:** el campo `category` indica la clase de activo del fondo. Las categorías posibles NO deben hardcodearse — se obtienen del campo `category` de la respuesta. **Regla estricta:** bajo ninguna circunstancia el agente debe inventar, deducir o asumir categorías que no estén explícitamente listadas en la respuesta del campo `category`. Si el CLI no devuelve una categoría, esa categoría no existe para efectos del análisis. Las principales categorías por contexto de dominio son:
 
 - `money_market`: deuda corto plazo (<90 días), vehículo ultra-conservador
 - `equity` / `libre_inversion`: ≥90% en instrumentos de capitalización (acciones)
 - `fixed_income`: deuda de mediano-largo plazo, expuesto a riesgo de tasa
 - `balanced`: mixto renta fija + renta variable, amplitud máx 50% en capitalización
 
-El agente debe usar estas definiciones para interpretar lo que la API devuelve, no asumir una lista cerrada.
+El agente debe usar estas definiciones para interpretar lo que el CLI devuelve, no asumir una lista cerrada.
 
 ---
 
@@ -92,16 +122,46 @@ buscafondos tac <asset_id>
 
 ```bash
 buscafondos tac-history <asset_id>
-buscafondos tac-history <asset_id> --from-date 20240101
+buscafondos tac-history <asset_id> --from-date 2024-01-01
 ```
 
 **Retorna:** serie temporal mensual de `expense_ratio` con `date`.
+
+**Formato de fechas:** usar ISO 8601 (`YYYY-MM-DD`). No usar otros formatos como `YYYYMMDD` o `DD/MM/YYYY`.
 
 **Para qué sirve:** detectar tendencias de alzas o bajas de costos en el tiempo. Si un fondo ha subido su TAC progresivamente, puede indicar problemas de escala (patrimonio decreciendo, costos fijos en expansión). Datos de baja de costos pueden indicar competencia o eficiencia operativa de la AGF.
 
 ---
 
 ## Comandos de Análisis de Riesgo y Performance
+
+### days <asset_id> — Serie histórica de valores cuota
+
+```bash
+buscafondos days <asset_id>
+buscafondos days <asset_id> --from-date 2024-01-01
+```
+
+**Parámetros:**
+- `--from-date <date>`: fecha inicio en formato `YYYY-MM-DD`.
+
+**Retorna:** serie temporal diaria de `price` (valor cuota) con `date`. Útil para calcular retornos manualmente o graficar evolución de precio.
+
+---
+
+### returns <asset_id> — Rentabilidad anualizada
+
+```bash
+buscafondos returns <asset_id>
+buscafondos returns <asset_id> --from-date 2024-01-01
+```
+
+**Parámetros:**
+- `--from-date <date>`: fecha inicio en formato `YYYY-MM-DD`.
+
+**Retorna:** rentabilidades anualizadas a 1Y y 3Y basadas en la serie de precios. Muestra valor cuota actual, rentabilidad anualizada y variación total.
+
+---
 
 ### risk <asset_id> — Métricas de riesgo
 
@@ -131,7 +191,13 @@ buscafondos all-funds --category money_market --date 2026-03-31
 
 **Retorna:** lista de todos los fondos vigentes del mercado. Cada registro incluye todos los campos de `series` más `dailyChange` (variación % hoy), `monthlyChange` (variación % mes), `tac` (expense_ratio), `patrimony` (millones de pesos), `shareholders`, métricas de riesgo completas, y `category`.
 
-**Cómo usarlo:** este es el comando principal de screening cuantitativo. El agente puede filtrar mentalmente los resultados por los criterios del análisis: TAC aceptable, categoría objetivo, nivel de riesgo, variación diaria/mensual. El resultado es una lista de candidatos para análisis profundo posterior.
+**Formato de fechas:** ISO 8601 (`YYYY-MM-DD`). No usar otros formatos.
+
+**Cómo usarlo:** este es el comando principal de screening cuantitativo. El agente debe usar `jq` para filtrar los resultados antes de procesarlos. Ejemplo:
+```bash
+buscafondos all-funds --category equity | jq '.data[] | select(.attributes.tac < 0.025)'
+```
+**NUNCA打印 el JSON completo** — usar jq para obtener solo los registros relevantes.
 
 **Descubrimiento de categorías:** en lugar de asumir categorías, el agente debe extraerlas de la respuesta de `all-funds` agrupando por el campo `category`. Las categorías posibles se descubren en runtime, no se hardcodifican.
 
@@ -156,8 +222,15 @@ buscafondos ranking --metric patrimony --date 2026-03-31
 ### evolution — Evolución mensual de AGF
 
 ```bash
-buscafondos evolution "BANCHILE ADMINISTRADORA GENERAL DE FONDOS S.A." "SCOTIABANK CHILE S.A." --metric patrimony --from-month 2024-01 --to-month 2025-12
+buscafondos evolution -a "BANCHILE ADMINISTRADORA GENERAL DE FONDOS S.A." -m patrimony -f 2024-01 -t 2025-12
+buscafondos evolution -a "SCOTIABANK CHILE S.A." -a "BANCO DE CHILE" -m shareholders
 ```
+
+**Parámetros:**
+- `-a, --admin <name>` (requerido): nombre de la administradora. Repetir `-a` para comparar varias.
+- `-m, --metric <metric>`: `patrimony` (default) o `shareholders`.
+- `-f, --from <month>`: mes inicio en formato `YYYY-MM`.
+- `-t, --to <month>`: mes fin en formato `YYYY-MM`.
 
 **Retorna:** serie temporal mensual pivotada por AGF con valores de `patrimony` o `shareholders` según `metric`.
 
@@ -214,9 +287,13 @@ Los fondos de deuda en Chile se valorizan con precios de proveedores como RiskAm
 
 Para fondos de renta variable, el benchmark es típicamente un índice de LVA Índices o RiskAmerica (ej: LVAZCS3B para deuda corporativa corto plazo BBB).
 
+**Regla de oro — Priorizar mayor rentabilidad neta:** al recomendar un fondo, USA directamente la rentabilidad que publica el fondo (que ya incluye el descuento de la TAC). No calcules "rentabilidad neta restando la TAC" porque sería un error grave (estarias descontando dos veces). Un fondo con 4% TAC y 12% de rentabilidad publicada supera a uno con 1% TAC y 6% de rentabilidad publicada: la diferencia de 6 puntos de rentabilidad neta compensa con creces la mayor TAC. **Siempre favorece mayor rentabilidad neta publicada, ajustada por riesgo.**
+
 ### Retorno y Riesgo: Ratios Derivados
 
-La API devuelve métricas de riesgo en bruto. El agente debe saber calcular o interpretar las siguientes métricas derivadas:
+Los datos de riesgo se obtienen del CLI. El agente debe saber calcular o interpretar las siguientes métricas derivadas:
+
+**Tasa Libre de Riesgo (Rf):** para Chile, usar la TPM del Banco Central de Chile (verificar valor actual) o rendimiento de bonos BCU/BCP según el horizonte del fondo. Si no se tiene acceso a datos en tiempo real de la TPM, declarar explícitamente el valor asumido (ej: "Asumiendo Rf = 5.5% basado en TPM abril 2026") y usar ese valor consistente en todos los cálculos de Sharpe Ratio del análisis. **No mezclar tasas ni inventar valores.**
 
 **Sharpe Ratio:**
 $$\text{Sharpe} = \frac{R_p - R_f}{\sigma_p}$$
@@ -271,7 +348,8 @@ El agente debe conocer el marco tributario para orientar análisis y comparacion
 
 1. Para cada candidato, ejecutar `series <concept_id>` para ver todas las series disponibles
 2. Para cada serie, ejecutar `tac <asset_id>` para comparar costos
-3. **Siempre recomendar la serie de menor TAC** disponible para el perfil del cliente. **Calcular el fee drag:** mostrar al usuario la diferencia monetaria en 10 y 20 años entre elegir la serie de menor TAC vs la de mayor TAC. Ejemplo: si la Serie A tiene TAC 3.5% y la Serie APV tiene TAC 1.2%, sobre un capital de $10.000.000 con retorno bruto anual del 7%, la diferencia de fees (2.3%) erosiona aproximadamente el 31% del capital final compuesto en 20 años. Este cálculo es obligatorio para ilustrar el costo de oportunidad.
+3. **Usar directamente la rentabilidad que publica cada serie** (ya incluye descuento de TAC — NO restar la TAC nuevamente). **Siempre recomendar la serie de mayor rentabilidad neta publicada.** La diferencia de TAC entre series de un mismo fondo puede ser de varios puntos porcentuales y erosiona fuertemente el capital compuesto en el tiempo: sobre un capital de $10.000.000 y retorno bruto anual del 7%, una diferencia de 2.3% en TAC (ej: Serie A 3.5% vs Serie APV 1.2%) erosiona aproximadamente el 31% del capital final compuesto en 20 años. Ilustrar este cálculo al usuario. Usar `bc`, `awk` o `node -e` en Bash para cálculos precisos de interés compuesto.
+4. Si `all-funds` devuelve error, array vacío o datos incompletos, verificar: formato de fechas (usar ISO 8601: YYYY-MM-DD), IDs正确os, y conexión. No inventar ni estimar datos faltantes — declarar la falla y sugerir el comando corregido.
 
 ### Objetivo: Análisis de Cartera y Diversificación
 
@@ -293,9 +371,22 @@ El agente debe conocer el marco tributario para orientar análisis y comparacion
 
 ---
 
-## Notas sobre la API
+## Manejo de Errores y Edge Cases
 
-- Los IDs que usa la API son CRC32 de identificadores originales de la CMF: no son arbitrarios, son derivables
+Si un comando devuelve error, array vacío o datos incompletos:
+
+1. **Verificar sintaxis del comando**: especialmente formato de fechas y IDs
+2. **Usar ISO 8601** para fechas: `YYYY-MM-DD` (ej: `2026-03-31`)
+3. **Verificar que el ID exista**: ejecutar `providers` o `all-funds` para confirmar IDs válidos
+4. **No inventar datos faltantes**: si el CLI no retorna información, declararlo explícitamente
+5. **Reintentar con parámetros corregidos**: si el formato era el problema, el segundo intento suele funcionar
+6. **Reportar falla clara**: indicar qué comando falló, qué error se obtuvo, y qué acción correctiva se tomó
+
+---
+
+## Notas sobre los Datos
+
+- Los IDs que usa el CLI son CRC32 de identificadores originales de la CMF: no son arbitrarios, son derivables
 - Los datos son públicos y provienen de la CMF Chile
 - Las métricas de riesgo son snapshots: verificar `as_of_date` para confirmar vigencia
-- Para due diligence cualitativa de una AGF (gobierno corporativo, conflictos de agencia, rotación de equipo), se requiere información adicional fuera de esta API (cuestionarios DDQ, infos públicas de la CMF)
+- Para due diligence cualitativa de una AGF (gobierno corporativo, conflictos de agencia, rotación de equipo), se requiere información adicional fuera de esta CLI (cuestionarios DDQ, infos públicas de la CMF)

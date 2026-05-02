@@ -210,6 +210,24 @@ async function cartera(run, month) {
   printTable(headers, rows);
 }
 
+async function evolution(administrators, metric, fromMonth, toMonth) {
+  const data = await client.evolution(administrators, metric, fromMonth, toMonth);
+  const items = data.data || [];
+  const meta = data.meta || {};
+  console.log(chalk.bold(`\nEvolucion AGF - ${meta.metric}\n`));
+  console.log('Administradoras:', meta.administrators.join(', '), '\n');
+  const headers = ['Mes', ...meta.administrators.map(a => a.substring(0, 30))];
+  const rows = items.map(item => {
+    const row = [item.month];
+    for (const admin of meta.administrators) {
+      const val = item[admin];
+      row.push(val != null ? val.toLocaleString() : '-');
+    }
+    return row;
+  });
+  printTable(headers, rows);
+}
+
 async function holdings(run, month, market) {
   const data = await client.carteraHoldings(run, month, market);
   const items = data.data || [];
@@ -277,13 +295,13 @@ program.command('holdings')
 program.command('days')
   .description('Serie historica de valores cuota')
   .argument('<asset_id>', 'ID de la serie')
-  .option('-f, --from-date <date>', 'Fecha inicio (YYYYMMDD)')
+  .option('-f, --from-date <date>', 'Fecha inicio (YYYY-MM-DD)')
   .action((assetId, opts) => days(assetId, opts.fromDate));
 
 program.command('returns')
   .description('Rentabilidad anualizada a 1Y, 3Y')
   .argument('<asset_id>', 'ID de la serie')
-  .option('-f, --from-date <date>', 'Fecha inicio (YYYYMMDD)')
+  .option('-f, --from-date <date>', 'Fecha inicio (YYYY-MM-DD)')
   .action((assetId, opts) => returns(assetId, opts.fromDate));
 
 program.command('tac-history')
@@ -291,5 +309,18 @@ program.command('tac-history')
   .argument('<asset_id>', 'ID de la serie')
   .option('-f, --from-date <date>', 'Fecha inicio (YYYYMMDD)')
   .action((assetId, opts) => tacHistory(assetId, opts.fromDate));
+
+program.command('evolution')
+  .description('Evolucion mensual de administradoras (patrimonio o participantes)')
+  .requiredOption('-a, --admin <name>', 'Nombre de administradora (repetir -a para varias)')
+  .option('-m, --metric <metric>', 'Metrica: patrimony | shareholders', 'patrimony')
+  .option('-f, --from <month>', 'Mes inicio (YYYY-MM)')
+  .option('-t, --to <month>', 'Mes fin (YYYY-MM)')
+  .action((opts) => evolution(
+    Array.isArray(opts.admin) ? opts.admin : [opts.admin],
+    opts.metric,
+    opts.from,
+    opts.to
+  ));
 
 program.parse();
