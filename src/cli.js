@@ -186,12 +186,13 @@ async function allFunds(category, date, limit) {
 async function days(assetId, fromDate, limit) {
   const result = await client.getDays(parseInt(assetId), fromDate);
   handleResult(result, (data) => {
-    const items = (data.data || []).slice(0, limit);
     const meta = data.meta || {};
+    const allItems = (data.data || []).reverse();
+    const items = limit ? allItems.slice(0, limit) : allItems.slice(0, 30);
     if (globalJson || globalOutputFile) return data;
     console.log(chalk.bold(`\nSerie historica - Asset ${meta.asset_id} (${items.length} dias)${limit ? ` (of ${data.data?.length || 0})` : ''}\n`));
     const headers = ['Fecha', 'Valor Cuota'];
-    const rows = items.slice(-30).reverse().map(item => {
+    const rows = items.map(item => {
       const attrs = item.attributes || item;
       return [attrs.date || '', (attrs.price || 0).toFixed(4)];
     });
@@ -427,7 +428,7 @@ program.command('evolution')
   .option('-f, --from <month>', 'Mes inicio (YYYY-MM)')
   .option('-t, --to <month>', 'Mes fin (YYYY-MM)')
   .action((opts) => evolution(
-    Array.isArray(opts.admin) ? opts.admin : [opts.admin],
+    opts.admin,
     opts.metric,
     opts.from,
     opts.to

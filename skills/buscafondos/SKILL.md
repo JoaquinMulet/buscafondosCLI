@@ -256,13 +256,13 @@ buscafondos ranking --metric patrimony --date 2026-03-31
 ### evolution — Evolución mensual de AGF
 
 ```bash
-buscafondos evolution -a "BANCHILE ADMINISTRADORA GENERAL DE FONDOS S.A." -m patrimony -f 2024-01 -t 2025-12
-buscafondos evolution -a "SCOTIABANK CHILE S.A." -a "BANCO DE CHILE" -m shareholders
+buscafondos evolution -a "FINTUAL ADMINISTRADORA GENERAL DE FONDOS S.A." -m patrimony -f 2024-01 -t 2025-12
+buscafondos evolution -a "BANCHILE ADMINISTRADORA GENERAL DE FONDOS S.A." -a "SANTANDER ASSET MANAGEMENT S.A. ADMINISTRADORA GENERAL DE FONDOS" -m shareholders
 ```
 
 **Parámetros:**
 
-- `-a, --admin <name>` (requerido): Nombre de la administradora. Repetir `-a` para comparar varias.
+- `-a, --admin <name>` (requerido): Nombre exacto de la administradora. Repetir `-a` para comparar varias. **Nota:** Debe usar el nombre completo como aparece en `providers`. Nombres parciales no funcionarán.
 - `-m, --metric <metric>`: `patrimony` (por defecto) o `shareholders`.
 - `-f, --from <month>`: Mes de inicio en formato `YYYY-MM`.
 - `-t, --to <month>`: Mes de fin en formato `YYYY-MM`.
@@ -270,6 +270,8 @@ buscafondos evolution -a "SCOTIABANK CHILE S.A." -a "BANCO DE CHILE" -m sharehol
 **Retorna:** Serie temporal mensual pivotada por AGF con valores de `patrimony` o `shareholders` según la métrica (`metric`) elegida.
 
 **Para qué sirve:** Analizar tendencias de crecimiento o contracción patrimonial de una o varias AGF a lo largo del tiempo. Permite identificar qué AGF están ganando o perdiendo tamaño y si existen correlaciones entre los flujos de distintas administradoras.
+
+**Nota sobre nombres de AGF:** La API requiere el nombre completo de la administradora. Use `buscafondos providers` para obtener los nombres exactos. Ejemplo: use "FINTUAL ADMINISTRADORA GENERAL DE FONDOS S.A." y no solo "FINTUAL".
 
 ---
 
