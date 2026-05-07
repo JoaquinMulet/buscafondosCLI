@@ -1,0 +1,105 @@
+# CodeRabbit configuration for BuscaFondos CLI.
+# Schema: https://docs.coderabbit.ai/getting-started/configure-coderabbit
+#
+# CodeRabbit is a free GitHub App for public repos. Install once:
+#   https://github.com/marketplace/coderabbit-ai
+# After install, every PR is auto-reviewed using these instructions.
+
+language: en-US
+
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  review_status: true
+  collapse_walkthrough: false
+  poem: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+
+  path_filters:
+    - "!node_modules/**"
+    - "!package-lock.json"
+
+  # Project-specific instructions: anchor every review to the 5 abstraction
+  # layers documented in CLAUDE.md.
+  path_instructions:
+    - path: "**"
+      instructions: |
+        Read CLAUDE.md first — it defines the project's contract. The CLI is a
+        "perfect copy of the BuscaFondos API + 5 deliberate abstraction layers
+        for LLM consumers." Anchor every review on those layers; functional
+        correctness alone is not enough.
+
+        The 5 layers (any of these broken = regression, even if the change
+        otherwise works):
+          1. `meta` + `data` envelope on every list command — must include
+             total_records, returned_records, has_more, limit, offset.
+             `limit` must be `null`, never absent, when no --limit is passed.
+          2. Client-side filters for `all-funds` (--max-tac, --min-patrimony,
+             --agf, --search, --sort-by, --order). Don't move them server-side
+             without a stated reason.
+          3. `describe <schema>` registry (SCHEMAS in src/cli.js) stays in
+             sync with any list-command shape change. Stale schemas cause
+             silent agent hallucinations.
+          4. Stable error envelope from BuscaFondosClient._get — `{success,
+             data}` or `{success, error: {type, message, status?}}`. Never
+             throws. `process.exit(1)` only inside `handleResult`.
+          5. `--json` / `--output` short-circuit pretty-printing. Tables in
+             JSON mode break jq pipelines.
+
+        Cross-doc sync: if a list command's shape changed, SCHEMAS,
+        skills/buscafondos/SKILL.md, and README.md must move together.
+
+        Layering: src/api.js is transport-only (no console/chalk/process.exit);
+        src/cli.js is presentation. Flag any cross-layer leakage.
+
+        Tests: every behavioral change should have a test in test/api.test.js
+        or test/cli.test.js. Flag tests that use setTimeout, hit the real
+        api.buscafondos.com, or only check "no panic" without asserting.
+
+        Anti-patterns to flag:
+          - Defensive `?.` / `|| 0` chains added to silence crashes (root cause
+            is usually upstream shape change; fix at data-extraction layer).
+          - New runtime deps without justification (project ships axios,
+            chalk, commander only).
+          - Skipped tests without an issue link.
+          - Commit messages claiming "tests pass" without naming the command
+            that was run.
+
+    - path: "src/api.js"
+      instructions: |
+        Pure transport. No formatting, no console output, no process.exit, no
+        throwing. All methods return `{success, data}` or `{success, error:
+        {type, message, status?}}`. Flag any deviation.
+
+    - path: "src/cli.js"
+      instructions: |
+        Presentation only. Network calls go through BuscaFondosClient (api.js).
+        Every list command must route through `wrapResponse` for the meta+data
+        envelope. Every data extractor must short-circuit when
+        `globalJson || globalOutputFile` is set. process.exit lives in
+        `handleResult` only.
+
+    - path: "test/**"
+      instructions: |
+        Tests must be offline (mock server only — never hit
+        api.buscafondos.com). Use execFile (async), not spawnSync — the mock
+        server runs on the same event loop and spawnSync deadlocks it.
+        For error-path tests, install overrides via server.overrides.set in
+        a try/finally.
+
+    - path: "skills/buscafondos/SKILL.md"
+      instructions: |
+        Public agent-facing contract — this is a deliverable, not docs.
+        Renaming a command, changing flag semantics, or altering the JSON
+        envelope is a breaking change for every downstream agent that has the
+        skill installed. Block changes that diverge from the README/CLI
+        without a sync update.
+
+chat:
+  auto_reply: true
