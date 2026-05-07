@@ -29,7 +29,7 @@ function wrapResponse(items, total, limit, offset) {
       total_records: total,
       returned_records: items.length,
       has_more: (offset || 0) + items.length < total,
-      limit: limit,
+      limit: limit ?? null,
       offset: offset || 0
     },
     data: items
@@ -581,7 +581,11 @@ program.command('tac-history')
 
 program.command('evolution')
   .description('Evolucion mensual de administradoras (patrimonio o participantes)')
-  .requiredOption('-a, --admin <name>', 'Nombre de administradora (repetir -a para varias)')
+  .requiredOption(
+    '-a, --admin <name>',
+    'Nombre de administradora (repetir -a para varias)',
+    (val, prev) => (Array.isArray(prev) ? [...prev, val] : [val])
+  )
   .option('-m, --metric <metric>', 'Metrica: patrimony | shareholders', 'patrimony')
   .option('-f, --from <month>', 'Mes inicio (YYYY-MM)')
   .option('-t, --to <month>', 'Mes fin (YYYY-MM)')
