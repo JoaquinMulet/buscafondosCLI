@@ -226,9 +226,16 @@ gh api repos/:owner/:repo/pulls/$PR/comments --jq '.[] | "\(.user.login) on \(.p
 
 If you find yourself doing this often, write a `scripts/pr-comments.sh` and add it to `package.json` as `"pr:comments": "bash scripts/pr-comments.sh"` — a thin script you can fix when GitHub's response shape shifts is better than memorizing flags.
 
-## Debugging CI Failures
+## CI
 
-There is no CI configured *yet*. When CI is added (likely GitHub Actions running `npm test` against the local mock server, plus a smoke-test job hitting a staging API), the rules below apply. They are written now so they are not invented under pressure later.
+GitHub Actions is configured for this repo:
+
+- [.github/workflows/test.yml](.github/workflows/test.yml) — runs `npm test` on Node 18, 20, and 22 for every PR against `main` and every push to `main`. Matrix is `fail-fast: false`, so one Node version failing doesn't mask the others.
+- **CodeRabbit** — free GitHub App for public repos. Configured by [.coderabbit.yaml](.coderabbit.yaml). Auto-reviews every PR against `main` using project-specific instructions anchored to the 5 abstraction layers. Setup is one-time: install the App at https://github.com/marketplace/coderabbit-ai. After install, no per-PR action needed — the review just appears as inline comments + a top-level summary.
+
+The two together mean: every PR gets (a) tests run on three Node versions and (b) an AI review that flags abstraction-layer violations, stale `SCHEMAS`/`SKILL.md`/`README.md`, defensive `?.`/`|| 0` chains, and unjustified new dependencies — without you doing anything. `/ultrareview <PR#>` remains the canonical "deep" review when you want a multi-agent pass on top.
+
+## Debugging CI Failures
 
 ### Read the actual log first
 
@@ -281,6 +288,36 @@ If output from a CI-debugging helper looks wrong — mis-parsed log, confusing w
 13. **Never take destructive shortcuts to silence errors.** No `--no-verify`, no `git reset --hard` on unfamiliar state, no skipping tests to make CI green. See "Debugging CI Failures" above.
 
 **ONLY** push changes after (a) smoke-testing the affected command (`npm start -- <cmd>`), (b) running the relevant test file (`node --test test/<file>.test.js`), and (c) running through the Self-Review checklist in "Code Review" above.
+
+## Releases
+
+The CLI ships via `npm install -g .` (and the README documents `npm install -g git+...` for end users). Two places hold the version string and **must move together**:
+
+- [package.json:3](package.json:3) — `"version"` field
+- [src/cli.js](src/cli.js) — the `.version(...)` call on the Commander program
+
+When releasing:
+
+1. **Decide the bump (semver):**
+   - **patch** (1.1.1 → 1.1.2): bug fix, doc-only change, internal refactor.
+   - **minor** (1.1.1 → 1.2.0): new command, new flag, new optional capability — backwards-compatible additions.
+   - **major** (1.1.1 → 2.0.0): breaking change to a command, a flag, or the JSON envelope shape (envelope changes are user-facing for LLM consumers — even removing a key is breaking).
+
+2. **Update both `package.json` and `src/cli.js` in the same commit.** A version mismatch between the two means `buscafondos --version` lies.
+
+3. **Open the PR with the bump included** — don't separate it into its own PR. Reviewers benefit from seeing the bump alongside the change that motivated it.
+
+4. **After merge, tag the merge commit on `main`:**
+
+   ```bash
+   git checkout main && git pull
+   git tag -a v<version> -m "Release v<version>"
+   git push origin v<version>
+   ```
+
+5. **(Optional) Create a GitHub release from the tag** with notes pulled from the merged PR description. `gh release create v<version> --generate-notes` does this in one shot.
+
+The version is duplicated across two files for now because Commander needs the string at definition time. If this becomes a maintenance burden, replace the hardcoded value in `src/cli.js` with `import pkg from '../package.json' with { type: 'json' }` and read from `pkg.version`.
 
 ## The Skill (`skills/buscafondos/SKILL.md`)
 
