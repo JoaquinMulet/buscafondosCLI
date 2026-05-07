@@ -233,7 +233,7 @@ GitHub Actions is configured for this repo:
 - [.github/workflows/test.yml](.github/workflows/test.yml) — runs `npm test` on Node 18, 20, and 22 for every PR against `main` and every push to `main`. Matrix is `fail-fast: false`, so one Node version failing doesn't mask the others.
 - **CodeRabbit** — free GitHub App for public repos. Configured by [.coderabbit.yaml](.coderabbit.yaml). Auto-reviews every PR against `main` using project-specific instructions anchored to the 5 abstraction layers. Setup is one-time: install the App at https://github.com/marketplace/coderabbit-ai. After install, no per-PR action needed — the review just appears as inline comments + a top-level summary.
 
-The two together mean: every PR gets (a) tests run on three Node versions and (b) an AI review that flags abstraction-layer violations, stale `SCHEMAS`/`SKILL.md`/`README.md`, defensive `?.`/`|| 0` chains, and unjustified new dependencies — without you doing anything. `/ultrareview <PR#>` remains the canonical "deep" review when you want a multi-agent pass on top.
+The two together mean: every PR gets (a) tests run on three Node versions and (b) an AI review that flags abstraction-layer violations, stale `SCHEMAS`/`SKILL.md`/`README.md`, defensive `?.`/`|| 0` chains, and unjustified new dependencies — without you doing anything. **CodeRabbit is the canonical "external eye"** required by the Code Review section below; no further reviewer is needed before merge.
 
 ## Debugging CI Failures
 
