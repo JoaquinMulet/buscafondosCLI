@@ -14,6 +14,7 @@
 
 ## Test plan
 
-<!-- Bulleted checklist a reviewer can run -->
+<!-- Concrete commands a reviewer can run, with expected outcomes. Replace these examples with checks specific to this PR. -->
 
--
+- [ ] `npm test` — expected: 64+/64+ tests pass on Node 18, 20, 22
+- [ ] `npm start -- <affected-command>` — expected: rendered output matches the change description above

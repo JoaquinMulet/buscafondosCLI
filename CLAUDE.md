@@ -78,14 +78,14 @@ Mirror the file you're changing. A bug in `tac` belongs in the existing `tac` de
 The CLI tests never hit the real API. The flow is:
 
 1. `before()` starts the mock server, sets `BUSCAFONDOS_API_URL` in the subprocess env to point at it.
-2. Each test runs `spawnSync('node', [CLI, ...args], { env })` and asserts on stdout/stderr/status.
-3. For error-path tests, install an override before spawning and clear it in `finally`:
+2. Each test runs `await execFile('node', [CLI, ...args], { env })` (promisified) and asserts on stdout/stderr/exit code. **Use `execFile` (async), not `spawnSync`.** The mock server runs on the same event loop as the test harness; `spawnSync` would block that loop and the server would never answer the subprocess's request, deadlocking on the 30s axios timeout. The wrapper in [test/cli.test.js](test/cli.test.js) catches `execFile`'s rejection-on-non-zero-exit and returns a uniform `{stdout, stderr, status}` for both success and expected-error cases.
+3. For error-path tests, install an override before running and clear it in `finally`:
 
 ```javascript
-test('upstream 404 → exit 1', () => {
+test('upstream 404 → exit 1', async () => {
   server.overrides.set('/api/conceptual_assets/999/real_assets', { status: 404, body: { detail: 'Not found' } });
   try {
-    const r = run(['series', '999']);
+    const r = await run(['series', '999']);
     assert.equal(r.status, 1);
     assert.match(r.stderr, /Error:/);
   } finally {
@@ -98,7 +98,7 @@ test('upstream 404 → exit 1', () => {
 
 - **CRITICAL**: Never hit the real `https://api.buscafondos.com` from tests. Tests must be deterministic, offline, and free.
 - **CRITICAL**: Don't write tests that only check "no panic / no uncaught exception". They never fail and are dead weight.
-- Don't use `setTimeout` to wait for things. Await the actual condition (`spawnSync` returns synchronously; for async work await the promise).
+- Don't use `setTimeout` to wait for things. Await the actual condition — `await` the `execFile` promise, await the process exit, etc.
 - Assert on `stdout` **before** asserting on exit code — when an assertion blows up, the stdout/stderr diff is what tells you what went wrong.
 - For JSON-mode commands, parse `stdout` and assert on the object, not the string. Whitespace/key-order assertions rot.
 - For `chalk`-colored output, set `NO_COLOR=1` and `FORCE_COLOR=0` in the subprocess env so regex assertions don't fight ANSI escapes.
