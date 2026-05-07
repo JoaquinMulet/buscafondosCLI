@@ -486,7 +486,7 @@ const program = new Command();
 program
   .name('buscafondos')
   .description('CLI para fondos mutuos chilenos via API de BuscaFondos')
-  .version('1.1.0')
+  .version('1.1.1')
   .addOption(new Option('-j, --json').hideHelp())
   .addOption(new Option('-o, --output <file>').hideHelp())
   .hook('preAction', (thisCommand) => {
