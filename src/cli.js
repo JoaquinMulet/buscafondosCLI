@@ -290,55 +290,80 @@ async function days(assetId, opts) {
 }
 
 async function returns(assetId, opts) {
-  const result = await client.getDays(parseInt(assetId), opts.fromDate, { limit: 1000 });
+  // 1500 trading days ≈ 6 calendar years, comfortable headroom for 3Y lookback.
+  const result = await client.getDays(parseInt(assetId), opts.fromDate, { limit: 1500 });
   handleResult(result, (data) => {
     const items = data.data || [];
     const prices = items
       .map(item => ({ date: item.attributes.date, price: item.attributes.price }))
+      .filter(p => p.date && p.price > 0)
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    function annualizedReturn(startPrice, endPrice, days) {
-      if (!startPrice || !endPrice || days <= 0) return 0;
-      return (Math.pow(endPrice / startPrice, 365 / days) - 1) * 100;
+    if (prices.length === 0) {
+      const empty = { currentPrice: null, currentDate: null, periods: [] };
+      if (globalJson || globalOutputFile) return empty;
+      console.log(chalk.yellow('Sin precios disponibles.'));
+      return empty;
     }
 
     const now = prices[prices.length - 1];
+    const earliest = prices[0].date;
+
+    function subtractCalendarDays(isoDate, days) {
+      const d = new Date(isoDate + 'T00:00:00Z');
+      d.setUTCDate(d.getUTCDate() - days);
+      return d.toISOString().slice(0, 10);
+    }
+
+    function priceOnOrBefore(targetISO) {
+      // The `days` endpoint returns trading days only, so the exact targetISO may
+      // not exist (weekends/holidays). Take the most recent price on or before.
+      let result = null;
+      for (const p of prices) {
+        if (p.date <= targetISO) result = p;
+        else break;
+      }
+      return result;
+    }
+
+    function yearsBetween(startISO, endISO) {
+      const ms = new Date(endISO + 'T00:00:00Z') - new Date(startISO + 'T00:00:00Z');
+      return ms / (365.25 * 24 * 3600 * 1000);
+    }
+
     const periods = [
-      { name: '1Y', days: 365 },
-      { name: '3Y', days: 365 * 3 }
+      { name: '1Y', calendarDays: 365 },
+      { name: '3Y', calendarDays: 365 * 3 }
     ];
 
+    const computed = [];
+    for (const p of periods) {
+      const targetISO = subtractCalendarDays(now.date, p.calendarDays);
+      // Require history to extend back to (or before) the target calendar date.
+      if (earliest > targetISO) continue;
+      const start = priceOnOrBefore(targetISO);
+      if (!start || !start.price) continue;
+      const years = yearsBetween(start.date, now.date);
+      if (years <= 0) continue;
+      const totalReturn = ((now.price / start.price) - 1) * 100;
+      const annualizedReturn = (Math.pow(now.price / start.price, 1 / years) - 1) * 100;
+      computed.push({ name: p.name, annualizedReturn, totalReturn });
+    }
+
     if (globalJson || globalOutputFile) {
-      const returns = { currentPrice: now.price, currentDate: now.date, periods: [] };
-      for (const p of periods) {
-        const idx = prices.length - 1 - p.days;
-        if (idx >= 0) {
-          const start = prices[idx];
-          returns.periods.push({
-            name: p.name,
-            annualizedReturn: annualizedReturn(start.price, now.price, p.days),
-            totalReturn: ((now.price / start.price) - 1) * 100
-          });
-        }
-      }
-      return returns;
+      return { currentPrice: now.price, currentDate: now.date, periods: computed };
     }
 
     console.log(chalk.bold(`\nRentabilidades anualizadas - Asset ${assetId}\n`));
     console.log(`Valor cuota actual (${now.date}): ${now.price.toFixed(4)}\n`);
-    const headers = ['Periodo', 'Rentabilidad Anualizada %', 'Variacion Total %'];
-    const rows = [];
-    for (const p of periods) {
-      const idx = prices.length - 1 - p.days;
-      if (idx >= 0) {
-        const start = prices[idx];
-        const annRet = annualizedReturn(start.price, now.price, p.days);
-        const totalRet = ((now.price / start.price) - 1) * 100;
-        rows.push([p.name, annRet.toFixed(2) + '%', totalRet.toFixed(2) + '%']);
-      }
+    if (computed.length === 0) {
+      console.log(chalk.yellow('Sin historial suficiente para 1Y/3Y.'));
+    } else {
+      const headers = ['Periodo', 'Rentabilidad Anualizada %', 'Variacion Total %'];
+      const rows = computed.map(p => [p.name, p.annualizedReturn.toFixed(2) + '%', p.totalReturn.toFixed(2) + '%']);
+      printTable(headers, rows);
     }
-    printTable(headers, rows);
-    return { currentPrice: now.price, currentDate: now.date, periods: rows };
+    return { currentPrice: now.price, currentDate: now.date, periods: computed };
   });
 }
 
@@ -486,7 +511,7 @@ const program = new Command();
 program
   .name('buscafondos')
   .description('CLI para fondos mutuos chilenos via API de BuscaFondos')
-  .version('1.1.1')
+  .version('1.1.2')
   .addOption(new Option('-j, --json').hideHelp())
   .addOption(new Option('-o, --output <file>').hideHelp())
   .hook('preAction', (thisCommand) => {
