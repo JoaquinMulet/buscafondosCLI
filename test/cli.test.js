@@ -310,6 +310,32 @@ describe('CLI', () => {
   });
 
   describe('returns', () => {
+    // Generate trading-day-only prices (Mon-Fri) compounding at `ratePerYear`
+    // continuously per calendar day. Mirrors how the real API exposes prices:
+    // weekends + holidays are omitted, but the price reflects calendar-time growth.
+    function generateTradingDays(startISO, calendarYears, ratePerYear = 0.10) {
+      const start = new Date(startISO + 'T00:00:00Z');
+      const end = new Date(start);
+      end.setUTCFullYear(end.getUTCFullYear() + calendarYears);
+      const data = [];
+      const cur = new Date(start);
+      while (cur < end) {
+        const dow = cur.getUTCDay();
+        if (dow !== 0 && dow !== 6) {
+          const years = (cur - start) / (365.25 * 86400e3);
+          const price = 100 * Math.pow(1 + ratePerYear, years);
+          const iso = cur.toISOString().slice(0, 10);
+          data.push({
+            id: `test_${iso}`,
+            type: 'real_asset_day',
+            attributes: { date: iso, price: Math.round(price * 10000) / 10000 },
+          });
+        }
+        cur.setUTCDate(cur.getUTCDate() + 1);
+      }
+      return { data };
+    }
+
     test('computes 1Y and 3Y periods from sufficient history', async () => {
       const r = await run(['--json', 'returns', '111222333']);
       assert.equal(r.status, 0, r.stderr);
@@ -322,6 +348,93 @@ describe('CLI', () => {
       // Annualized return for our deterministic fixture (~0.03%/day) ≈ 11.5%/yr.
       const oneY = out.periods.find((p) => p.name === '1Y');
       assert.ok(oneY.annualizedReturn > 5 && oneY.annualizedReturn < 20);
+    });
+
+    test('1Y uses calendar-date lookup, not array-index (regression)', async () => {
+      // 5 calendar years of trading-day-only data growing at exactly 10%/yr.
+      // The pre-fix code did `prices.length - 1 - 365`, which on trading-day
+      // data lands ~1.45 calendar years back, inflating "1Y" to ~14.9%.
+      // Calendar lookup must report ~10%.
+      server.overrides.set(
+        '/api/real_assets/111222333/days',
+        { body: generateTradingDays('2021-05-15', 5, 0.10) }
+      );
+      try {
+        const r = await run(['--json', 'returns', '111222333']);
+        assert.equal(r.status, 0, r.stderr);
+        const out = JSON.parse(r.stdout);
+        const oneY = out.periods.find((p) => p.name === '1Y');
+        assert.ok(oneY, '1Y must be present');
+        assert.ok(
+          oneY.annualizedReturn > 9 && oneY.annualizedReturn < 11,
+          `1Y annualized must be ~10% from calendar lookup, got ${oneY.annualizedReturn}`,
+        );
+        const threeY = out.periods.find((p) => p.name === '3Y');
+        assert.ok(threeY, '3Y must be present');
+        assert.ok(
+          threeY.annualizedReturn > 9 && threeY.annualizedReturn < 11,
+          `3Y annualized must be ~10% over true 3-year span, got ${threeY.annualizedReturn}`,
+        );
+      } finally {
+        server.overrides.delete('/api/real_assets/111222333/days');
+      }
+    });
+
+    test('1Y totalReturn matches end/start ratio for ~1-year span', async () => {
+      // With ~13 months of trading-day data, 1Y must use the price on or before
+      // (today - 365 days) and report a total return matching that exact ratio.
+      server.overrides.set(
+        '/api/real_assets/111222333/days',
+        { body: generateTradingDays('2024-04-01', 2, 0.06) },
+      );
+      try {
+        const r = await run(['--json', 'returns', '111222333']);
+        assert.equal(r.status, 0, r.stderr);
+        const out = JSON.parse(r.stdout);
+        const oneY = out.periods.find((p) => p.name === '1Y');
+        assert.ok(oneY, '1Y must be present');
+        // Span is approximately 1 calendar year, so annualized ≈ total.
+        assert.ok(
+          Math.abs(oneY.totalReturn - 6) < 0.3,
+          `1Y total return must be ~6%, got ${oneY.totalReturn}`,
+        );
+        assert.ok(
+          Math.abs(oneY.annualizedReturn - 6) < 0.3,
+          `1Y annualized must be ~6%, got ${oneY.annualizedReturn}`,
+        );
+      } finally {
+        server.overrides.delete('/api/real_assets/111222333/days');
+      }
+    });
+
+    test('omits 1Y and 3Y when history is shorter than the period', async () => {
+      // Six months of data: neither 1Y nor 3Y has enough history.
+      server.overrides.set(
+        '/api/real_assets/111222333/days',
+        { body: generateTradingDays('2025-11-01', 0.5, 0.10) },
+      );
+      try {
+        const r = await run(['--json', 'returns', '111222333']);
+        assert.equal(r.status, 0, r.stderr);
+        const out = JSON.parse(r.stdout);
+        assert.deepEqual(out.periods, []);
+      } finally {
+        server.overrides.delete('/api/real_assets/111222333/days');
+      }
+    });
+
+    test('empty price history returns null currentPrice and empty periods', async () => {
+      server.overrides.set('/api/real_assets/111222333/days', { body: { data: [] } });
+      try {
+        const r = await run(['--json', 'returns', '111222333']);
+        assert.equal(r.status, 0, r.stderr);
+        const out = JSON.parse(r.stdout);
+        assert.equal(out.currentPrice, null);
+        assert.equal(out.currentDate, null);
+        assert.deepEqual(out.periods, []);
+      } finally {
+        server.overrides.delete('/api/real_assets/111222333/days');
+      }
     });
   });
 

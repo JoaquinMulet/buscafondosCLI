@@ -367,7 +367,11 @@ buscafondos returns <asset_id> --from-date 2024-01-01
 
 - `-f, --from-date <date>`: Fecha de inicio en formato `YYYY-MM-DD`. (Nota: este parámetro es aceptado pero actualmente no filtra los datos — siempre retorna la rentabilidad anualizada completa.)
 
-**Retorna:** Rentabilidades anualizadas a 1Y y 3Y basadas en la serie de precios. Muestra el valor cuota actual, la rentabilidad anualizada y la variación total.
+**Retorna:** Rentabilidades a 1Y y 3Y basadas en la serie de precios.
+
+- **Anclaje calendario, no por índice de array.** La rentabilidad usa el precio cuota más cercano (igual o anterior) a `hoy − 365 días` (1Y) y `hoy − 1095 días` (3Y). Como el endpoint `days` retorna solo días hábiles, este anclaje calendar es crítico: 365 *posiciones* atrás corresponden a ~1,45 años calendario, no a 1 año.
+- **Campos:** `currentPrice`, `currentDate`, y `periods[]` con `name` (`1Y`/`3Y`), `annualizedReturn` (anualización geométrica usando el span exacto en años) y `totalReturn` (`end/start − 1`). Para 1Y ambos valores son casi iguales (span ≈ 1 año); para 3Y `annualizedReturn` es la TIR geométrica y `totalReturn` la rentabilidad compuesta del período.
+- Si el histórico no cubre el período pedido, ese `name` se omite del array `periods` (no se devuelve `0` ni `null`).
 
 ---
 
