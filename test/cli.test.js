@@ -316,7 +316,7 @@ describe('CLI', () => {
     function generateTradingDays(startISO, calendarYears, ratePerYear = 0.10) {
       const start = new Date(startISO + 'T00:00:00Z');
       const end = new Date(start);
-      end.setUTCFullYear(end.getUTCFullYear() + calendarYears);
+      end.setUTCMonth(end.getUTCMonth() + Math.round(calendarYears * 12));
       const data = [];
       const cur = new Date(start);
       while (cur < end) {
