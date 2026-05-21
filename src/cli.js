@@ -290,7 +290,7 @@ async function days(assetId, opts) {
 }
 
 async function returns(assetId, opts) {
-  // 1500 trading days ≈ 6 calendar years, comfortable headroom for 3Y lookback.
+  // /days ignores `limit`; 1500 (~6yr) is an inert cap, kept in case the endpoint ever honors it.
   const result = await client.getDays(parseInt(assetId), opts.fromDate, { limit: 1500 });
   handleResult(result, (data) => {
     const items = data.data || [];
